@@ -57,7 +57,7 @@ function showView(name) {
     }
 
     // 2. Leer configuración de la encuesta
-    const surveyRef  = doc(db, "survey", tokenData.surveyId);
+    const surveyRef  = doc(db, "surveys", tokenData.surveyId);
     const surveySnap = await getDoc(surveyRef);
 
     if (!surveySnap.exists()) {
@@ -112,6 +112,8 @@ function renderSurvey() {
           <div class="rating-group" data-aspect="${aIdx}" data-question="${qIdx}">
             ${[1,2,3,4,5].map(n => `<button class="rating-btn" data-val="${n}">${n}</button>`).join('')}
           </div>
+          <textarea class="comment-input question-comment" data-question-comment="${aIdx}_${qIdx}"
+            placeholder="Comentario (opcional)…" rows="2"></textarea>
         </div>
       `).join('')}
       <div class="comment-wrap">
@@ -326,10 +328,15 @@ window.submitSurvey = async function() {
   try {
     // Recoger comentarios desde el DOM
     const aspectComments = {};
+    const questionComments = {};
     (surveyData.aspects || []).forEach((a, aIdx) => {
       if (!a.active) return;
       const val = document.querySelector(`[data-aspect-comment="${aIdx}"]`)?.value?.trim();
       if (val) aspectComments[aIdx] = val;
+      (a.questions || []).forEach((_, qIdx) => {
+        const qVal = document.querySelector(`[data-question-comment="${aIdx}_${qIdx}"]`)?.value?.trim();
+        if (qVal) questionComments[`${aIdx}_${qIdx}`] = qVal;
+      });
     });
 
     const coordinatorComment = document.querySelector('[data-field="coordinatorComment"]')?.value?.trim() || '';
@@ -359,6 +366,7 @@ window.submitSurvey = async function() {
       submittedAt:                serverTimestamp(),
       answers:                    answers,
       aspectComments:             aspectComments,
+      questionComments:           questionComments,
       aspectAverages:             aspectAverages,
       globalAverage:              globalAverage,
       coordinatorPersonalScore:   answers.coordinatorPersonalScore,
@@ -405,5 +413,3 @@ window.submitSurvey = async function() {
     alert('Error al enviar la encuesta: ' + err.message + '\nInténtalo de nuevo.');
   }
 };
-
-
