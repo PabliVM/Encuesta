@@ -273,12 +273,13 @@ body{
 }
 .rating-btn{
   flex:1;
-  height:44px;
+  height:36px;
+  font-size:13px;
   border:2px solid var(--border);
   border-radius:var(--r);
   background:var(--surface-alt);
   color:var(--text-sec);
-  font-size:15px; font-weight:700;
+  font-size:13px; font-weight:700;
   cursor:pointer;
   transition:all var(--tr);
   -webkit-tap-highlight-color:transparent;
@@ -498,6 +499,14 @@ body.dark .review-warning{
   .btn-submit{ height:54px; font-size:16px; }
   .review-actions{ flex-direction:column; }
   .btn-back, .btn-confirm{ flex:none; width:100%; }
+}
+
+/* Comentario por pregunta */
+.question-comment{
+  margin-top:8px;
+  min-height:48px;
+  font-size:12px;
+  color:var(--text-sec);
 }
 
 
