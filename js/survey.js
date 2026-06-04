@@ -57,7 +57,7 @@ function showView(name) {
     }
 
     // 2. Leer configuración de la encuesta
-    const surveyRef  = doc(db, "surveys", tokenData.surveyId);
+    const surveyRef  = doc(db, "survey", tokenData.surveyId);
     const surveySnap = await getDoc(surveyRef);
 
     if (!surveySnap.exists()) {
