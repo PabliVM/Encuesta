@@ -509,4 +509,52 @@ body.dark .review-warning{
   color:var(--text-sec);
 }
 
+/* =====================================================
+   SEPARACIÓN VISUAL ENTRE ASPECTOS
+   ===================================================== */
+.aspect-card{
+  border-left:4px solid var(--border);
+  transition:border-color var(--tr), box-shadow var(--tr);
+}
+.aspect-card:nth-child(odd){ border-left-color:var(--rm-blue); }
+.aspect-card:nth-child(even){ border-left-color:var(--border); }
+.aspect-card:hover{
+  border-left-color:var(--rm-blue);
+  box-shadow:var(--sh-md);
+}
+
+/* =====================================================
+   PILLS EN UNA LÍNEA (móvil)
+   ===================================================== */
+.scale-pills{
+  display:flex;
+  flex-wrap:nowrap;
+  gap:4px;
+  margin-top:8px;
+  overflow-x:auto;
+  padding-bottom:2px;
+}
+.pill{
+  font-size:10px; font-weight:600;
+  padding:3px 7px; border-radius:20px;
+  color:#fff;
+  white-space:nowrap;
+  flex-shrink:0;
+}
+
+/* =====================================================
+   BLOQUES VAL PROFESIONAL / PERSONAL
+   ===================================================== */
+.val-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+}
+.val-col{}
+.val-col-label{
+  font-size:11px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.5px;
+  color:var(--rm-blue);
+  margin-bottom:8px;
+}
 
