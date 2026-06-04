@@ -47,82 +47,88 @@
     <div class="survey-intro card">
       <h2 id="surveyTitle" class="survey-main-title"></h2>
       <p id="surveyDesc" class="survey-desc"></p>
-      <div class="scale-legend">
-        <span>Escala de valoración:</span>
-        <div class="scale-pills">
-          <span class="pill pill-1">1 · Muy bajo</span>
-          <span class="pill pill-2">2 · Bajo</span>
-          <span class="pill pill-3">3 · Correcto</span>
-          <span class="pill pill-4">4 · Bueno</span>
-          <span class="pill pill-5">5 · Excelente</span>
-        </div>
+      <div class="scale-legend">Escala de valoración:</div>
+      <div class="scale-pills">
+        <span class="pill pill-1">1 · Muy bajo</span>
+        <span class="pill pill-2">2 · Bajo</span>
+        <span class="pill pill-3">3 · Correcto</span>
+        <span class="pill pill-4">4 · Bueno</span>
+        <span class="pill pill-5">5 · Excelente</span>
       </div>
     </div>
+
+    <!-- ASPECTOS DINÁMICOS -->
     <div id="aspectsContainer"></div>
 
-    <!-- BLOQUE FINAL: COORDINADOR / TÉCNICO / GLOBAL -->
-    <div class="card aspect-card" id="blockCoordinator">
+    <!-- BLOQUE: VALORACIÓN PROFESIONAL -->
+    <div class="card aspect-card valblock" id="blockProfesional">
       <div class="aspect-header">
-        <span class="aspect-icon">👤</span>
-        <h3 class="aspect-title">Valoración del Coordinador</h3>
+        <span class="aspect-icon">💼</span>
+        <h3 class="aspect-title">Valoración Profesional</h3>
       </div>
-      <div class="question-row">
-        <label class="question-label">Valoración personal del coordinador</label>
-        <div class="rating-group" data-field="coordinatorPersonalScore">
-          <button class="rating-btn" data-val="1">1</button>
-          <button class="rating-btn" data-val="2">2</button>
-          <button class="rating-btn" data-val="3">3</button>
-          <button class="rating-btn" data-val="4">4</button>
-          <button class="rating-btn" data-val="5">5</button>
+      <div class="val-grid">
+        <div class="val-col">
+          <div class="val-col-label">Coordinador</div>
+          <div class="rating-group" data-field="coordinatorProfessionalScore">
+            <button class="rating-btn" data-val="1">1</button>
+            <button class="rating-btn" data-val="2">2</button>
+            <button class="rating-btn" data-val="3">3</button>
+            <button class="rating-btn" data-val="4">4</button>
+            <button class="rating-btn" data-val="5">5</button>
+          </div>
+        </div>
+        <div class="val-col">
+          <div class="val-col-label">Propia</div>
+          <div class="rating-group" data-field="coachProfessionalScore">
+            <button class="rating-btn" data-val="1">1</button>
+            <button class="rating-btn" data-val="2">2</button>
+            <button class="rating-btn" data-val="3">3</button>
+            <button class="rating-btn" data-val="4">4</button>
+            <button class="rating-btn" data-val="5">5</button>
+          </div>
         </div>
       </div>
-      <div class="question-row">
-        <label class="question-label">Valoración profesional del coordinador</label>
-        <div class="rating-group" data-field="coordinatorProfessionalScore">
-          <button class="rating-btn" data-val="1">1</button>
-          <button class="rating-btn" data-val="2">2</button>
-          <button class="rating-btn" data-val="3">3</button>
-          <button class="rating-btn" data-val="4">4</button>
-          <button class="rating-btn" data-val="5">5</button>
-        </div>
-      </div>
-      <div class="comment-wrap">
-        <label class="comment-label">Comentario sobre el coordinador <span class="optional">(opcional)</span></label>
+      <div class="comment-wrap" style="margin-top:14px">
+        <label class="comment-label">Comentario profesional <span class="optional">(opcional)</span></label>
         <textarea class="comment-input" data-field="coordinatorComment" placeholder="Escribe aquí tu comentario…" rows="3"></textarea>
       </div>
     </div>
 
-    <div class="card aspect-card" id="blockCoach">
+    <!-- BLOQUE: VALORACIÓN PERSONAL -->
+    <div class="card aspect-card valblock" id="blockPersonal">
       <div class="aspect-header">
-        <span class="aspect-icon">🏅</span>
-        <h3 class="aspect-title">Valoración Personal de la Temporada</h3>
+        <span class="aspect-icon">👤</span>
+        <h3 class="aspect-title">Valoración Personal</h3>
       </div>
-      <div class="question-row">
-        <label class="question-label">Valoración personal propia</label>
-        <div class="rating-group" data-field="coachPersonalScore">
-          <button class="rating-btn" data-val="1">1</button>
-          <button class="rating-btn" data-val="2">2</button>
-          <button class="rating-btn" data-val="3">3</button>
-          <button class="rating-btn" data-val="4">4</button>
-          <button class="rating-btn" data-val="5">5</button>
+      <div class="val-grid">
+        <div class="val-col">
+          <div class="val-col-label">Coordinador</div>
+          <div class="rating-group" data-field="coordinatorPersonalScore">
+            <button class="rating-btn" data-val="1">1</button>
+            <button class="rating-btn" data-val="2">2</button>
+            <button class="rating-btn" data-val="3">3</button>
+            <button class="rating-btn" data-val="4">4</button>
+            <button class="rating-btn" data-val="5">5</button>
+          </div>
+        </div>
+        <div class="val-col">
+          <div class="val-col-label">Propia</div>
+          <div class="rating-group" data-field="coachPersonalScore">
+            <button class="rating-btn" data-val="1">1</button>
+            <button class="rating-btn" data-val="2">2</button>
+            <button class="rating-btn" data-val="3">3</button>
+            <button class="rating-btn" data-val="4">4</button>
+            <button class="rating-btn" data-val="5">5</button>
+          </div>
         </div>
       </div>
-      <div class="question-row">
-        <label class="question-label">Valoración profesional propia</label>
-        <div class="rating-group" data-field="coachProfessionalScore">
-          <button class="rating-btn" data-val="1">1</button>
-          <button class="rating-btn" data-val="2">2</button>
-          <button class="rating-btn" data-val="3">3</button>
-          <button class="rating-btn" data-val="4">4</button>
-          <button class="rating-btn" data-val="5">5</button>
-        </div>
-      </div>
-      <div class="comment-wrap">
-        <label class="comment-label">Comentario sobre tu temporada <span class="optional">(opcional)</span></label>
+      <div class="comment-wrap" style="margin-top:14px">
+        <label class="comment-label">Comentario personal <span class="optional">(opcional)</span></label>
         <textarea class="comment-input" data-field="coachComment" placeholder="Escribe aquí tu comentario…" rows="3"></textarea>
       </div>
     </div>
 
+    <!-- BLOQUE: VALORACIÓN GLOBAL -->
     <div class="card aspect-card" id="blockGlobal">
       <div class="aspect-header">
         <span class="aspect-icon">⭐</span>
@@ -186,7 +192,6 @@
   Cantera del Real Madrid CF · Encuesta de Valoración
 </footer>
 
-<!-- FIREBASE -->
 <script type="module" src="js/firebase-init.js"></script>
 <script type="module" src="js/survey.js"></script>
 <script>
