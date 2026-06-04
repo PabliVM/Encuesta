@@ -1,1 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Cargar Encuesta · Setup</title>
+<style>
+  body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; }
+  button { padding: 12px 24px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }
+  button:disabled { opacity: .5; }
+  pre { background: #f0f2f5; padding: 16px; border-radius: 8px; font-size: 12px; margin-top: 20px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h2>Cargar Encuesta 1 en Firestore</h2>
+<p>Esto actualiza el documento <code>TemzWgBuv8oz8i0Vwckq</code> en la colección <code>survey</code> con todos los aspectos y preguntas.</p>
+<p><strong>Ejecutar solo una vez.</strong></p>
+<button id="btn" onclick="cargar()">Cargar encuesta</button>
+<pre id="log">Esperando…</pre>
 
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const app = initializeApp({
+  apiKey: "AIzaSyBCV9zfsSel5CGITv4pbekb21-Iy3WUoZw",
+  authDomain: "survey-fee49.firebaseapp.com",
+  projectId: "survey-fee49",
+});
+const db = getFirestore(app);
+
+const aspects = [
+  {
+    title: "CTs",
+    icon: "👥",
+    active: true,
+    questions: [
+      "Promociones",
+      "Sustitución de técnicos — ausencias",
+      "Convocatorias",
+      "Viajes / Torneos",
+      "Reuniones CT",
+      "Alineaciones - Disponibilidad de jugadores"
+    ]
+  },
+  {
+    title: "Metodología",
+    icon: "📋",
+    active: true,
+    questions: [
+      "Visualización entrenamientos y partidos",
+      "Valoraciones de técnicos",
+      "Soporte desarrollo",
+      "Informes de jugadores"
+    ]
+  },
+  {
+    title: "Psicología",
+    icon: "🧠",
+    active: true,
+    questions: [
+      "Planificación talleres de familias",
+      "Seguimiento de jugadores y familias en dinámica del departamento de psicología",
+      "Planificación entrevistas iniciales individuales",
+      "Seguimiento semanal de entrevistas",
+      "Planificación talleres de CTs"
+    ]
+  },
+  {
+    title: "Plataformas",
+    icon: "💻",
+    active: true,
+    questions: [
+      "Accesos",
+      "Incidencias",
+      "Desarrollos",
+      "Usos"
+    ]
+  },
+  {
+    title: "Nutrición",
+    icon: "🥗",
+    active: true,
+    questions: [
+      "Pautas nutricionales",
+      "Información desayunos y problemáticas",
+      "Planificación y organización de picnic para torneos"
+    ]
+  },
+  {
+    title: "Familias",
+    icon: "👨‍👩‍👧",
+    active: true,
+    questions: [
+      "Reuniones",
+      "Gestión diaria de incidencias, ausencias o dudas"
+    ]
+  },
+  {
+    title: "Jugadores",
+    icon: "⚽",
+    active: true,
+    questions: [
+      "Gestión actitudinal"
+    ]
+  },
+  {
+    title: "Residencia",
+    icon: "🏠",
+    active: true,
+    questions: [
+      "Permisos"
+    ]
+  },
+  {
+    title: "Servicios Médicos",
+    icon: "⚕️",
+    active: true,
+    questions: [
+      "Disponibilidades de jugadores",
+      "Coordinación de tiempos y necesidades de jugadores",
+      "Seguimiento de lesionados"
+    ]
+  },
+  {
+    title: "Utilería",
+    icon: "👕",
+    active: true,
+    questions: [
+      "Peticiones de material jugadores",
+      "Gestión pérdida de material",
+      "Gestión de ropa para jugadores a prueba"
+    ]
+  }
+];
+
+window.cargar = async function() {
+  const btn = document.getElementById('btn');
+  const log = document.getElementById('log');
+  btn.disabled = true;
+  log.textContent = 'Cargando…';
+
+  try {
+    const ref = doc(db, "survey", "TemzWgBuv8oz8i0Vwckq");
+    await updateDoc(ref, { aspects });
+    log.textContent = '✅ Encuesta cargada correctamente.\n\n' + JSON.stringify(aspects, null, 2);
+  } catch(e) {
+    log.textContent = '❌ Error: ' + e.message;
+    btn.disabled = false;
+  }
+};
+</script>
+</body>
+</html>
