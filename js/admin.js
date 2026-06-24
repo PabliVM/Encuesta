@@ -576,10 +576,11 @@ function renderResultsSummary(survey) {
               ${qComments.map((c, i) => `<div style="font-size:12px;color:var(--text-sec);font-style:italic;padding:2px 0;border-bottom:1px solid var(--border-light)">${i+1}. "${c}"</div>`).join('')}
             </div>`
           : '';
+        const qText = typeof q === 'string' ? q : (q.text || '—');
         aspectHtml += `
           <div style="margin-bottom:10px">
             <div style="font-size:12px;color:var(--text-sec);margin-bottom:4px;font-weight:600">
-              ${q} <span style="color:var(--rm-blue);font-weight:800">${avg}</span>
+              ${qText} <span style="color:var(--rm-blue);font-weight:800">${avg}</span>
             </div>
             ${dist.map((count, i) => `
               <div class="bar-row">
@@ -660,11 +661,16 @@ window.openResponse = function(id) {
     html += `<div class="detail-section">
       <div class="detail-section-title">${a.icon || ''} ${a.title}</div>`;
     (a.questions || []).forEach((q, qIdx) => {
-      const score = r.answers?.[`${aIdx}_${qIdx}`] || '—';
+      // Normalizar — preguntas pueden ser string (antiguo) u objeto (nuevo)
+      const qText = typeof q === 'string' ? q : (q.text || '—');
+      const qType = typeof q === 'string' ? 'scale' : (q.type || 'scale');
+      const score   = r.answers?.[`${aIdx}_${qIdx}`];
       const comment = r.questionComments?.[`${aIdx}_${qIdx}`] || '';
+      const scoreDisplay = score != null ? score : '—';
+      const scoreLabel = qType === 'scale' ? `${scoreDisplay}/5` : (scoreDisplay || '—');
       html += `<div class="detail-row">
-        <span class="detail-q">${q}</span>
-        <span class="detail-score score-${score}">${score}/5</span>
+        <span class="detail-q">${qText}</span>
+        <span class="detail-score score-${scoreDisplay}">${scoreLabel}</span>
       </div>`;
       if (comment) html += `<div class="detail-comment">"${comment}"</div>`;
     });
