@@ -471,24 +471,11 @@ window.loadResults = async function() {
     const avgs  = responses.map(r => r.globalAverage).filter(Boolean);
     const mean  = avgs.length ? (avgs.reduce((a,b)=>a+b,0)/avgs.length).toFixed(2) : '—';
 
-    // Media por aspecto (resumen rápido)
-    const aspectMeans = (s.aspects||[]).filter(a=>a.active).map((a, aIdx) => {
-      const scores = [];
-      responses.forEach(r => {
-        (a.questions||[]).forEach((_,qIdx) => {
-          const v = r.answers?.[`${aIdx}_${qIdx}`];
-          if(v) scores.push(v);
-        });
-      });
-      const avg = scores.length ? (scores.reduce((x,y)=>x+y,0)/scores.length).toFixed(1) : '—';
-      return `<span style="font-size:11px;color:var(--text-sec)">${a.icon||''} ${a.title}: <strong>${avg}</strong></span>`;
-    }).join(' · ');
-
     return `
       <div class="survey-item" style="cursor:pointer" onclick="openResultsSurvey('${s.id}')">
         <div class="survey-item-info">
           <div class="survey-item-title">${s.title || 'Sin título'}</div>
-          <div class="survey-item-meta" style="margin-top:4px">${aspectMeans || 'Sin respuestas'}</div>
+          <div class="survey-item-meta">${s.season || ''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:16px;flex-shrink:0">
           <div style="text-align:center">
@@ -630,21 +617,27 @@ function calcAspectAvg(aIdx, questions) {
 
 function renderResponsesList() {
   const el = $('resultsList');
-  if (!allResponses.length) { el.innerHTML = ''; return; }
+  if (!allResponses.length) {
+    el.innerHTML = '<p style="color:var(--text-mut);font-size:13px;margin-top:12px">No hay respuestas todavía.</p>';
+    return;
+  }
 
   el.innerHTML = `
-    <h3 style="font-size:14px;font-weight:700;margin:16px 0 8px">Respuestas individuales</h3>
-    ${allResponses.map(r => {
+    <h3 style="font-size:14px;font-weight:700;margin:16px 0 8px">Respuestas individuales (${allResponses.length})</h3>
+    ${allResponses.map((r, idx) => {
       const date = r.submittedAt?.toDate
         ? r.submittedAt.toDate().toLocaleString('es-ES')
         : '—';
       return `
-        <div class="response-item" onclick="openResponse('${r.id}')">
-          <div>
-            <div style="font-size:13px;font-weight:600">Token: ${r.token}</div>
+        <div class="response-item">
+          <div style="cursor:pointer;flex:1" onclick="openResponse('${r.id}')">
+            <div style="font-size:13px;font-weight:700">Respuesta ${idx + 1}</div>
             <div class="response-date">${date}</div>
           </div>
-          <div class="response-avg">${r.globalAverage || '—'}</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+            <div class="response-avg">${r.globalAverage || '—'}</div>
+            <button class="btn-danger" onclick="deleteResponse('${r.id}', event)" style="height:30px;padding:0 10px">🗑</button>
+          </div>
         </div>
       `;
     }).join('')}
@@ -704,6 +697,16 @@ window.openResponse = function(id) {
 };
 
 // ── EXPORTAR CSV ──────────────────────────────────────────
+window.deleteResponse = async function(id, event) {
+  event.stopPropagation();
+  if (!confirm('¿Eliminar esta respuesta? Esta acción no se puede deshacer.')) return;
+  await deleteDoc(doc(db, 'surveyResponses', id));
+  allResponses = allResponses.filter(r => r.id !== id);
+  renderResponsesList();
+  // Actualizar también la lista de tarjetas
+  loadResults();
+};
+
 window.exportCSV = function() {
   if (!allResponses.length) { alert('No hay respuestas para exportar.'); return; }
 
