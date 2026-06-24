@@ -66,17 +66,23 @@
 
     <!-- TAB: RESULTADOS -->
     <div id="tabResultados" class="tab-content" style="display:none">
-      <div class="tab-header">
-        <h2 class="tab-title">Resultados</h2>
-        <button class="btn-secondary" onclick="exportCSV()">⬇ Exportar CSV</button>
+      <!-- Vista: lista de encuestas -->
+      <div id="resultsSurveyList">
+        <div class="tab-header">
+          <h2 class="tab-title">Resultados</h2>
+        </div>
+        <div id="resultsSurveyCards"></div>
       </div>
-      <div class="filter-row">
-        <select class="form-select" id="filterResultSurvey" onchange="loadResults()">
-          <option value="">Selecciona encuesta</option>
-        </select>
+      <!-- Vista: detalle de una encuesta -->
+      <div id="resultsDetail" style="display:none">
+        <div class="tab-header">
+          <button class="btn-secondary" onclick="backToResultsList()">← Volver</button>
+          <h2 class="tab-title" id="resultsDetailTitle"></h2>
+          <button class="btn-secondary" onclick="exportCSV()">⬇ CSV</button>
+        </div>
+        <div id="resultsSummary"></div>
+        <div id="resultsList"></div>
       </div>
-      <div id="resultsSummary"></div>
-      <div id="resultsList"></div>
     </div>
 
   </div>
@@ -123,6 +129,19 @@
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal('modalSurvey')">Cancelar</button>
       <button class="btn-primary" onclick="saveSurvey()">Guardar encuesta</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: PREVIEW ENCUESTA -->
+<div class="modal-overlay" id="modalPreview" style="display:none">
+  <div class="modal-box modal-preview">
+    <div class="modal-header">
+      <h3 class="modal-title">Vista previa de la encuesta</h3>
+      <button class="modal-close" onclick="closePreview()">✕</button>
+    </div>
+    <div class="modal-preview-body">
+      <iframe id="previewFrame" src="" frameborder="0"></iframe>
     </div>
   </div>
 </div>
