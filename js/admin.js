@@ -130,7 +130,7 @@ function populateSurveySelects() {
 
 window.openPreview = function(surveyId) {
   const frame = document.getElementById('previewFrame');
-  frame.src = `/index.html?survey=${surveyId}`;
+  frame.src = `/index.html?survey=${surveyId}&preview=1`;
   document.getElementById('modalPreview').style.display = 'flex';
 };
 
