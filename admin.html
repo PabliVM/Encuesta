@@ -52,7 +52,6 @@
     <!-- TABS -->
     <div class="admin-tabs">
       <button class="tab-btn active" onclick="showTab('tabEncuestas')">📋 Encuestas</button>
-      <button class="tab-btn" onclick="showTab('tabTokens')">🔑 Tokens</button>
       <button class="tab-btn" onclick="showTab('tabResultados')">📊 Resultados</button>
     </div>
 
@@ -63,25 +62,6 @@
         <button class="btn-primary" onclick="openNewSurvey()">+ Nueva encuesta</button>
       </div>
       <div id="surveyList"></div>
-    </div>
-
-    <!-- TAB: TOKENS -->
-    <div id="tabTokens" class="tab-content" style="display:none">
-      <div class="tab-header">
-        <h2 class="tab-title">Gestión de Tokens</h2>
-        <button class="btn-primary" onclick="openGenTokens()">+ Generar tokens</button>
-      </div>
-      <div class="filter-row">
-        <select class="form-select" id="filterSurvey" onchange="loadTokens()">
-          <option value="">Todas las encuestas</option>
-        </select>
-        <select class="form-select" id="filterUsed" onchange="loadTokens()">
-          <option value="">Todos</option>
-          <option value="false">Pendientes</option>
-          <option value="true">Usados</option>
-        </select>
-      </div>
-      <div id="tokenList"></div>
     </div>
 
     <!-- TAB: RESULTADOS -->
@@ -143,30 +123,6 @@
     <div class="modal-footer">
       <button class="btn-secondary" onclick="closeModal('modalSurvey')">Cancelar</button>
       <button class="btn-primary" onclick="saveSurvey()">Guardar encuesta</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: GENERAR TOKENS -->
-<div class="modal-overlay" id="modalTokens" style="display:none">
-  <div class="modal-box modal-sm">
-    <div class="modal-header">
-      <h3 class="modal-title">Generar tokens</h3>
-      <button class="modal-close" onclick="closeModal('modalTokens')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">Encuesta</label>
-        <select class="form-select" id="tokenSurveyId"></select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Cantidad de tokens</label>
-        <input class="form-input" type="number" id="tokenQty" value="1" min="1" max="50">
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-secondary" onclick="closeModal('modalTokens')">Cancelar</button>
-      <button class="btn-primary" onclick="generateTokens()">Generar</button>
     </div>
   </div>
 </div>
