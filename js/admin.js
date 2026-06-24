@@ -155,6 +155,7 @@ window.editSurvey = function(id) {
 };
 
 window.saveSurvey = async function() {
+  syncAspectsFromDOM();
   const data = {
     title:       $('surveyTitle').value.trim(),
     description: $('surveyDesc').value.trim(),
@@ -176,24 +177,34 @@ window.saveSurvey = async function() {
 };
 
 // ── Editor de aspectos ────────────────────────────────────
+function syncAspectsFromDOM() {
+  document.querySelectorAll('.aspect-editor-item').forEach((el, aIdx) => {
+    if (!aspectsData[aIdx]) return;
+    const titleInput = el.querySelector('.aspect-title-input');
+    const iconInput  = el.querySelector('.aspect-icon-input');
+    if (titleInput) aspectsData[aIdx].title = titleInput.value;
+    if (iconInput)  aspectsData[aIdx].icon  = iconInput.value;
+    el.querySelectorAll('.question-input').forEach((qInput, qIdx) => {
+      if (aspectsData[aIdx].questions) aspectsData[aIdx].questions[qIdx] = qInput.value;
+    });
+  });
+}
+
 function renderAspectsEditor() {
   const el = $('aspectsEditor');
   el.innerHTML = aspectsData.map((a, aIdx) => `
     <div class="aspect-editor-item">
       <div class="aspect-editor-header">
-        <input class="form-input" value="${a.title || ''}"
-          oninput="aspectsData[${aIdx}].title=this.value"
+        <input class="form-input aspect-title-input" value="${(a.title||'').replace(/"/g,'&quot;')}"
           placeholder="Nombre del aspecto (ej: Metodología)">
-        <input class="form-input" style="width:60px" value="${a.icon || '📋'}"
-          oninput="aspectsData[${aIdx}].icon=this.value"
+        <input class="form-input aspect-icon-input" style="width:60px" value="${a.icon || '📋'}"
           placeholder="Icono">
         <button class="btn-remove" onclick="removeAspect(${aIdx})">✕</button>
       </div>
-      <div class="questions-list" id="questions_${aIdx}">
+      <div class="questions-list">
         ${(a.questions||[]).map((q, qIdx) => `
           <div class="question-editor-row">
-            <input class="form-input" value="${q}"
-              oninput="aspectsData[${aIdx}].questions[${qIdx}]=this.value"
+            <input class="form-input question-input" value="${(q||'').replace(/"/g,'&quot;')}"
               placeholder="Pregunta ${qIdx+1}">
             <button class="btn-remove" onclick="removeQuestion(${aIdx},${qIdx})">✕</button>
           </div>
@@ -205,24 +216,24 @@ function renderAspectsEditor() {
 }
 
 window.addAspect = function() {
-  aspectsData.push({ title:'', icon:'📋', active:true, questions:[] });
+  syncAspectsFromDOM();
+  aspectsData.push({ title:'', icon:'📋', active:true, questions:[''] });
   renderAspectsEditor();
 };
 
 window.removeAspect = function(idx) {
+  syncAspectsFromDOM();
   aspectsData.splice(idx, 1);
   renderAspectsEditor();
 };
 
 window.addQuestion = function(aIdx) {
+  syncAspectsFromDOM();
+  if (!aspectsData[aIdx].questions) aspectsData[aIdx].questions = [];
   aspectsData[aIdx].questions.push('');
   renderAspectsEditor();
 };
 
-window.removeQuestion = function(aIdx, qIdx) {
-  aspectsData[aIdx].questions.splice(qIdx, 1);
-  renderAspectsEditor();
-};
 
 // ── TOKENS ────────────────────────────────────────────────
 window.loadTokens = async function() {
