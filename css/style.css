@@ -422,3 +422,13 @@ body.dark .review-warning{ background:#2a2000; border-color:#78350f; color:#fbbf
   .btn-back, .btn-confirm{ flex:none; width:100%; }
   .two-col-grid{ grid-template-columns:1fr; }
 }
+
+/* ── Aspectos fijos (Profesional / Personal / Global) ── */
+.aspect-card-fixed{
+  border-left:4px solid var(--green);
+  background:linear-gradient(135deg, var(--surface) 0%, var(--rm-blue-bg) 100%);
+}
+body.dark .aspect-card-fixed{
+  background:linear-gradient(135deg, var(--surface) 0%, #1a2540 100%);
+}
+.aspect-card-fixed .aspect-title{ color:var(--rm-blue); }
