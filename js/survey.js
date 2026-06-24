@@ -184,7 +184,9 @@ function renderSurvey() {
       `;
     }).join('');
 
-    const isTwoCol = aspect.twoColumns === true;
+    const isTwoCol = aspect.twoColumns === true && !aspect.isFixed;
+    const isFixed  = aspect.isFixed === true;
+    if (isFixed) card.classList.add('aspect-card-fixed');
     card.innerHTML = `
       <div class="aspect-header">
         <span class="aspect-icon">${aspect.icon || '📋'}</span>
@@ -263,20 +265,8 @@ window.showReview = function() {
     });
   });
 
-  const fixedFields = [
-    'coordinatorPersonalScore','coordinatorProfessionalScore',
-    'coachPersonalScore','coachProfessionalScore','globalScore'
-  ];
-  fixedFields.forEach(key => {
-    if (!answers[key]) {
-      hasError = true;
-      const group = document.querySelector(`.rating-group[data-field="${key}"]`);
-      if (group) {
-        group.querySelectorAll('.rating-btn').forEach(b => b.classList.add('error'));
-        setTimeout(() => group.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('error')), 800);
-      }
-    }
-  });
+  // Los bloques fijos (Profesional/Personal/Global) son ahora aspectos normales
+  // su validación ya está cubierta en el loop de aspectos de arriba
 
   if (hasError) {
     const firstError = document.querySelector('.rating-btn.error');
@@ -299,11 +289,14 @@ function buildReview() {
     sec.className = 'review-section';
     sec.innerHTML = `<div class="review-section-title">${a.icon || ''} ${a.title}</div>`;
     (a.questions || []).forEach((q, qIdx) => {
+      const qText = typeof q === 'string' ? q : (q.text || '—');
+      const qType = typeof q === 'string' ? 'scale' : (q.type || 'scale');
       const score = answers[`${aIdx}_${qIdx}`];
+      const scoreDisplay = qType === 'scale' ? `${score} / 5` : (score || '—');
       sec.innerHTML += `
         <div class="review-row">
-          <span class="review-q">${q}</span>
-          <span class="review-score score-${score}">${score} / 5</span>
+          <span class="review-q">${qText}</span>
+          <span class="review-score score-${score}">${scoreDisplay}</span>
         </div>`;
       const qc = document.querySelector(`[data-question-comment="${aIdx}_${qIdx}"]`)?.value?.trim();
       if (qc) sec.innerHTML += `<div class="review-comment">"${qc}"</div>`;
@@ -313,23 +306,7 @@ function buildReview() {
     container.appendChild(sec);
   });
 
-  // Bloques fijos
-  const fixedSec = document.createElement('div');
-  fixedSec.className = 'review-section';
-  fixedSec.innerHTML = `<div class="review-section-title">💼 Profesional / 👤 Personal / ⭐ Global</div>
-    ${[
-      { label:'Val. profesional coordinador', key:'coordinatorProfessionalScore' },
-      { label:'Val. profesional propia',      key:'coachProfessionalScore' },
-      { label:'Val. personal coordinador',    key:'coordinatorPersonalScore' },
-      { label:'Val. personal propia',         key:'coachPersonalScore' },
-      { label:'Valoración global',            key:'globalScore' },
-    ].map(({ label, key }) => `
-      <div class="review-row">
-        <span class="review-q">${label}</span>
-        <span class="review-score score-${answers[key]}">${answers[key]} / 5</span>
-      </div>
-    `).join('')}`;
-  container.appendChild(fixedSec);
+  // Bloques fijos ya incluidos como aspectos normales arriba
 }
 
 window.backToSurvey = function() {
@@ -357,9 +334,7 @@ window.submitSurvey = async function() {
       });
     });
 
-    const coordinatorComment = document.querySelector('[data-field="coordinatorComment"]')?.value?.trim() || '';
-    const coachComment       = document.querySelector('[data-field="coachComment"]')?.value?.trim()       || '';
-    const finalComment       = document.querySelector('[data-field="finalComment"]')?.value?.trim()       || '';
+    // Comentarios finales — ya recogidos por aspectos normales
 
     // Calcular medias
     const aspectAverages = {};
@@ -380,14 +355,7 @@ window.submitSurvey = async function() {
       questionComments,
       aspectAverages,
       globalAverage,
-      coordinatorPersonalScore:     answers.coordinatorPersonalScore,
-      coordinatorProfessionalScore: answers.coordinatorProfessionalScore,
-      coordinatorComment,
-      coachPersonalScore:           answers.coachPersonalScore,
-      coachProfessionalScore:       answers.coachProfessionalScore,
-      coachComment,
-      globalScore:                  answers.globalScore,
-      finalComment,
+      // Scores guardados como answers normales (índice de aspecto_pregunta)
     });
 
     // Marcar cookie — 365 días
