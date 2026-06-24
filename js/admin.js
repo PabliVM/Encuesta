@@ -41,11 +41,9 @@ onAuthStateChanged(auth, user => {
     hide('viewLogin');
     show('viewDash');
     loadAllSurveys();
-    // Restaurar última pestaña
-    const lastTab = localStorage.getItem(LAST_TAB_KEY);
-    if (lastTab && document.getElementById(lastTab)) {
-      showTab(lastTab);
-    }
+    // Restaurar última pestaña — por defecto Encuestas
+    const lastTab = localStorage.getItem(LAST_TAB_KEY) || 'tabEncuestas';
+    showTab(lastTab);
   } else {
     currentUser = null;
     hide('viewDash');
@@ -113,7 +111,7 @@ function renderSurveyList() {
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <span class="badge ${s.active ? 'badge-green' : 'badge-gray'}">${s.active ? 'Activa' : 'Inactiva'}</span>
         <button class="btn-copy" onclick="copyLink('${s.id}')">📋 Copiar enlace</button>
-        <button class="btn-sm" onclick="window.open('/index.html?survey=${s.id}','_blank')">👁 Ver encuesta</button>
+        <button class="btn-sm" onclick="openPreview('${s.id}')">👁 Ver encuesta</button>
         <button class="btn-sm" onclick="editSurvey('${s.id}')">Editar</button>
         <button class="btn-danger" onclick="toggleSurveyActive('${s.id}', ${s.active})">
           ${s.active ? 'Desactivar' : 'Activar'}
@@ -127,8 +125,19 @@ function populateSurveySelects() {
   const opts = allSurveys.map(s =>
     `<option value="${s.id}">${s.title || s.id}</option>`
   ).join('');
-  $('filterResultSurvey').innerHTML = '<option value="">Selecciona encuesta</option>' + opts;
+  // filterResultSurvey ya no existe — resultados usa tarjetas
 }
+
+window.openPreview = function(surveyId) {
+  const frame = document.getElementById('previewFrame');
+  frame.src = `/index.html?survey=${surveyId}`;
+  document.getElementById('modalPreview').style.display = 'flex';
+};
+
+window.closePreview = function() {
+  document.getElementById('previewFrame').src = '';
+  document.getElementById('modalPreview').style.display = 'none';
+};
 
 window.copyLink = function(surveyId) {
   const link = `${location.origin}/index.html?survey=${surveyId}`;
@@ -193,6 +202,22 @@ window.saveSurvey = async function() {
   await loadAllSurveys();
 };
 
+// ── Tipos de pregunta disponibles ────────────────────────
+const QUESTION_TYPES = [
+  { value:'scale',    label:'Escala 1-5' },
+  { value:'text',     label:'Texto libre' },
+  { value:'radio',    label:'Opción única' },
+  { value:'checkbox', label:'Opción múltiple' },
+  { value:'yesno',    label:'Sí / No' },
+  { value:'select',   label:'Desplegable' },
+];
+
+// Normaliza preguntas antiguas (string) al nuevo formato (objeto)
+function normalizeQuestion(q) {
+  if (typeof q === 'string') return { text: q, type: 'scale', options: [] };
+  return { text: q.text||'', type: q.type||'scale', options: q.options||[] };
+}
+
 // ── Editor de aspectos ────────────────────────────────────
 function syncAspectsFromDOM() {
   document.querySelectorAll('.aspect-editor-item').forEach((el, aIdx) => {
@@ -201,40 +226,136 @@ function syncAspectsFromDOM() {
     const iconInput  = el.querySelector('.aspect-icon-input');
     if (titleInput) aspectsData[aIdx].title = titleInput.value;
     if (iconInput)  aspectsData[aIdx].icon  = iconInput.value;
-    el.querySelectorAll('.question-input').forEach((qInput, qIdx) => {
-      if (aspectsData[aIdx].questions) aspectsData[aIdx].questions[qIdx] = qInput.value;
+    el.querySelectorAll('.question-editor-row').forEach((row, qIdx) => {
+      if (!aspectsData[aIdx].questions[qIdx]) return;
+      const textInput = row.querySelector('.question-text-input');
+      const typeSelect = row.querySelector('.question-type-select');
+      if (textInput)  aspectsData[aIdx].questions[qIdx].text = textInput.value;
+      if (typeSelect) aspectsData[aIdx].questions[qIdx].type = typeSelect.value;
+      // Opciones (para radio/checkbox/select)
+      const optInputs = row.querySelectorAll('.option-input');
+      if (optInputs.length) {
+        aspectsData[aIdx].questions[qIdx].options = Array.from(optInputs).map(i => i.value).filter(Boolean);
+      }
     });
   });
 }
 
+function renderOptionsEditor(aIdx, qIdx, options) {
+  const hasOptions = ['radio','checkbox','select'].includes(aspectsData[aIdx]?.questions[qIdx]?.type);
+  if (!hasOptions) return '';
+  const opts = (options||[]).length ? options : [''];
+  return `
+    <div class="options-editor" style="margin-top:6px;padding:8px;background:var(--bg);border-radius:var(--rs)">
+      <div style="font-size:11px;font-weight:700;color:var(--text-mut);margin-bottom:6px;text-transform:uppercase;letter-spacing:.3px">Opciones</div>
+      ${opts.map((opt, oIdx) => `
+        <div style="display:flex;gap:6px;margin-bottom:4px">
+          <input class="form-input option-input" value="${(opt||'').replace(/"/g,'&quot;')}"
+            placeholder="Opción ${oIdx+1}" style="height:32px;font-size:12px">
+          <button class="btn-remove" onclick="removeOption(${aIdx},${qIdx},${oIdx})">✕</button>
+        </div>
+      `).join('')}
+      <button class="add-question-btn" onclick="addOption(${aIdx},${qIdx})">+ Añadir opción</button>
+    </div>
+  `;
+}
+
 function renderAspectsEditor() {
   const el = $('aspectsEditor');
-  el.innerHTML = aspectsData.map((a, aIdx) => `
+  const total = aspectsData.length;
+  el.innerHTML = aspectsData.map((a, aIdx) => {
+    const totalQ = (a.questions||[]).length;
+    return `
     <div class="aspect-editor-item">
       <div class="aspect-editor-header">
+        <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
+          <button class="btn-order" onclick="moveAspect(${aIdx},-1)" ${aIdx===0?'disabled':''}>↑</button>
+          <button class="btn-order" onclick="moveAspect(${aIdx},1)" ${aIdx===total-1?'disabled':''}>↓</button>
+        </div>
         <input class="form-input aspect-title-input" value="${(a.title||'').replace(/"/g,'&quot;')}"
           placeholder="Nombre del aspecto (ej: Metodología)">
         <input class="form-input aspect-icon-input" style="width:60px" value="${a.icon || '📋'}"
           placeholder="Icono">
+        <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-sec);white-space:nowrap;flex-shrink:0;cursor:pointer">
+          <input type="checkbox" ${a.twoColumns?'checked':''} onchange="toggleTwoColumns(${aIdx},this.checked)">
+          2 col.
+        </label>
         <button class="btn-remove" onclick="removeAspect(${aIdx})">✕</button>
       </div>
       <div class="questions-list">
-        ${(a.questions||[]).map((q, qIdx) => `
-          <div class="question-editor-row">
-            <input class="form-input question-input" value="${(q||'').replace(/"/g,'&quot;')}"
-              placeholder="Pregunta ${qIdx+1}">
-            <button class="btn-remove" onclick="removeQuestion(${aIdx},${qIdx})">✕</button>
-          </div>
-        `).join('')}
+        ${(a.questions||[]).map((q, qIdx) => {
+          const qn = normalizeQuestion(q);
+          aspectsData[aIdx].questions[qIdx] = qn;
+          return `
+          <div class="question-editor-row" style="flex-direction:column;align-items:stretch;gap:6px">
+            <div style="display:flex;gap:4px;align-items:center">
+              <div style="display:flex;flex-direction:column;gap:1px;flex-shrink:0">
+                <button class="btn-order" onclick="moveQuestion(${aIdx},${qIdx},-1)" ${qIdx===0?'disabled':''}>↑</button>
+                <button class="btn-order" onclick="moveQuestion(${aIdx},${qIdx},1)" ${qIdx===totalQ-1?'disabled':''}>↓</button>
+              </div>
+              <input class="form-input question-text-input" value="${(qn.text||'').replace(/"/g,'&quot;')}"
+                placeholder="Texto de la pregunta" style="flex:1">
+              <select class="form-select question-type-select" onchange="changeQuestionType(${aIdx},${qIdx},this.value)" style="width:130px">
+                ${QUESTION_TYPES.map(t => `<option value="${t.value}" ${qn.type===t.value?'selected':''}>${t.label}</option>`).join('')}
+              </select>
+              <button class="btn-remove" onclick="removeQuestion(${aIdx},${qIdx})">✕</button>
+            </div>
+            ${renderOptionsEditor(aIdx, qIdx, qn.options)}
+          </div>`;
+        }).join('')}
       </div>
       <button class="add-question-btn" onclick="addQuestion(${aIdx})">+ Añadir pregunta</button>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
+
+window.changeQuestionType = function(aIdx, qIdx, type) {
+  syncAspectsFromDOM();
+  aspectsData[aIdx].questions[qIdx].type = type;
+  if (['radio','checkbox','select'].includes(type) && !aspectsData[aIdx].questions[qIdx].options?.length) {
+    aspectsData[aIdx].questions[qIdx].options = ['',''];
+  }
+  renderAspectsEditor();
+};
+
+window.addOption = function(aIdx, qIdx) {
+  syncAspectsFromDOM();
+  if (!aspectsData[aIdx].questions[qIdx].options) aspectsData[aIdx].questions[qIdx].options = [];
+  aspectsData[aIdx].questions[qIdx].options.push('');
+  renderAspectsEditor();
+};
+
+window.removeOption = function(aIdx, qIdx, oIdx) {
+  syncAspectsFromDOM();
+  aspectsData[aIdx].questions[qIdx].options.splice(oIdx, 1);
+  renderAspectsEditor();
+};
+window.moveAspect = function(idx, dir) {
+  syncAspectsFromDOM();
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= aspectsData.length) return;
+  [aspectsData[idx], aspectsData[newIdx]] = [aspectsData[newIdx], aspectsData[idx]];
+  renderAspectsEditor();
+};
+
+window.moveQuestion = function(aIdx, qIdx, dir) {
+  syncAspectsFromDOM();
+  const qs = aspectsData[aIdx].questions;
+  const newIdx = qIdx + dir;
+  if (newIdx < 0 || newIdx >= qs.length) return;
+  [qs[qIdx], qs[newIdx]] = [qs[newIdx], qs[qIdx]];
+  renderAspectsEditor();
+};
+
+window.toggleTwoColumns = function(aIdx, val) {
+  syncAspectsFromDOM();
+  aspectsData[aIdx].twoColumns = val;
+  renderAspectsEditor();
+};
 
 window.addAspect = function() {
   syncAspectsFromDOM();
-  aspectsData.push({ title:'', icon:'📋', active:true, questions:[''] });
+  aspectsData.push({ title:'', icon:'📋', active:true, questions:[{ text:'', type:'scale', options:[] }] });
   renderAspectsEditor();
 };
 
@@ -247,7 +368,7 @@ window.removeAspect = function(idx) {
 window.addQuestion = function(aIdx) {
   syncAspectsFromDOM();
   if (!aspectsData[aIdx].questions) aspectsData[aIdx].questions = [];
-  aspectsData[aIdx].questions.push('');
+  aspectsData[aIdx].questions.push({ text:'', type:'scale', options:[] });
   renderAspectsEditor();
 };
 
@@ -332,22 +453,82 @@ window.generateTokens = async function() {
 };
 
 // ── RESULTADOS ────────────────────────────────────────────
+// ── Resultados: lista de encuestas ───────────────────────
 window.loadResults = async function() {
-  const surveyId = $('filterResultSurvey').value;
-  if (!surveyId) {
-    $('resultsSummary').innerHTML = '';
-    $('resultsList').innerHTML = '';
+  // Cargar conteo de respuestas por encuesta
+  const snap = await getDocs(collection(db, 'surveyResponses'));
+  const allResp = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  const cards = $('resultsSurveyCards');
+  if (!allSurveys.length) {
+    cards.innerHTML = '<p style="color:var(--text-mut);font-size:13px">No hay encuestas.</p>';
     return;
   }
+
+  cards.innerHTML = allSurveys.map(s => {
+    const responses = allResp.filter(r => r.surveyId === s.id);
+    const count = responses.length;
+    const avgs  = responses.map(r => r.globalAverage).filter(Boolean);
+    const mean  = avgs.length ? (avgs.reduce((a,b)=>a+b,0)/avgs.length).toFixed(2) : '—';
+
+    // Media por aspecto (resumen rápido)
+    const aspectMeans = (s.aspects||[]).filter(a=>a.active).map((a, aIdx) => {
+      const scores = [];
+      responses.forEach(r => {
+        (a.questions||[]).forEach((_,qIdx) => {
+          const v = r.answers?.[`${aIdx}_${qIdx}`];
+          if(v) scores.push(v);
+        });
+      });
+      const avg = scores.length ? (scores.reduce((x,y)=>x+y,0)/scores.length).toFixed(1) : '—';
+      return `<span style="font-size:11px;color:var(--text-sec)">${a.icon||''} ${a.title}: <strong>${avg}</strong></span>`;
+    }).join(' · ');
+
+    return `
+      <div class="survey-item" style="cursor:pointer" onclick="openResultsSurvey('${s.id}')">
+        <div class="survey-item-info">
+          <div class="survey-item-title">${s.title || 'Sin título'}</div>
+          <div class="survey-item-meta" style="margin-top:4px">${aspectMeans || 'Sin respuestas'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;flex-shrink:0">
+          <div style="text-align:center">
+            <div style="font-size:22px;font-weight:800;color:var(--rm-blue)">${count}</div>
+            <div style="font-size:10px;color:var(--text-mut);text-transform:uppercase;letter-spacing:.3px">Respuestas</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:22px;font-weight:800;color:var(--green)">${mean}</div>
+            <div style="font-size:10px;color:var(--text-mut);text-transform:uppercase;letter-spacing:.3px">Media</div>
+          </div>
+          <span style="color:var(--text-mut);font-size:18px">›</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+};
+
+// ── Resultados: entrar al detalle de una encuesta ─────────
+window.openResultsSurvey = async function(surveyId) {
+  const survey = allSurveys.find(s => s.id === surveyId);
+  $('resultsDetailTitle').textContent = survey?.title || 'Resultados';
 
   const snap = await getDocs(
     query(collection(db, 'surveyResponses'), where('surveyId', '==', surveyId))
   );
   allResponses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-  const survey = allSurveys.find(s => s.id === surveyId);
+  hide('resultsSurveyList');
+  show('resultsDetail');
+
   renderResultsSummary(survey);
   renderResponsesList();
+};
+
+window.backToResultsList = function() {
+  hide('resultsDetail');
+  show('resultsSurveyList');
+  $('resultsSummary').innerHTML = '';
+  $('resultsList').innerHTML = '';
+  allResponses = [];
 };
 
 function renderResultsSummary(survey) {
@@ -474,7 +655,7 @@ window.openResponse = function(id) {
   const r = allResponses.find(x => x.id === id);
   if (!r) return;
 
-  const surveyId = $('filterResultSurvey').value;
+  const surveyId = allResponses[0]?.surveyId || '';
   const survey   = allSurveys.find(s => s.id === surveyId);
   const date = r.submittedAt?.toDate
     ? r.submittedAt.toDate().toLocaleString('es-ES') : '—';
@@ -526,7 +707,7 @@ window.openResponse = function(id) {
 window.exportCSV = function() {
   if (!allResponses.length) { alert('No hay respuestas para exportar.'); return; }
 
-  const surveyId = $('filterResultSurvey').value;
+  const surveyId = allResponses[0]?.surveyId || '';
   const survey   = allSurveys.find(s => s.id === surveyId);
 
   const headers = ['token','fecha','media_global','val_prof_coordinador','val_prof_propia','val_pers_coordinador','val_pers_propia'];
