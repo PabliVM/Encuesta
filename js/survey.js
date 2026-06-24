@@ -85,6 +85,74 @@ function getCookie(name) {
   }
 })();
 
+// ── Renderizar input según tipo de pregunta ──────────────
+function renderQuestionInput(qn, aIdx, qIdx) {
+  const key = `${aIdx}_${qIdx}`;
+  switch(qn.type) {
+    case 'scale':
+      return `<div class="rating-group" data-aspect="${aIdx}" data-question="${qIdx}">
+        ${[1,2,3,4,5].map(n => `<button class="rating-btn" data-val="${n}">${n}</button>`).join('')}
+      </div>`;
+
+    case 'text':
+      return `<textarea class="comment-input" data-text-answer="${key}"
+        placeholder="Escribe tu respuesta…" rows="3"
+        oninput="answers['${key}']=this.value"></textarea>`;
+
+    case 'yesno':
+      return `<div class="rating-group yesno-group">
+        <button class="rating-btn yesno-btn" data-key="${key}" data-val="Sí" onclick="selectYesNo(this,'${key}')">Sí</button>
+        <button class="rating-btn yesno-btn" data-key="${key}" data-val="No" onclick="selectYesNo(this,'${key}')">No</button>
+      </div>`;
+
+    case 'radio':
+      return `<div class="options-group" data-key="${key}">
+        ${(qn.options||[]).map((opt,i) => `
+          <label class="option-label">
+            <input type="radio" name="q_${key}" value="${opt}"
+              onchange="answers['${key}']=this.value;updateProgress()">
+            <span>${opt}</span>
+          </label>`).join('')}
+      </div>`;
+
+    case 'checkbox':
+      return `<div class="options-group" data-key="${key}">
+        ${(qn.options||[]).map((opt,i) => `
+          <label class="option-label">
+            <input type="checkbox" value="${opt}"
+              onchange="updateCheckbox('${key}',this)">
+            <span>${opt}</span>
+          </label>`).join('')}
+      </div>`;
+
+    case 'select':
+      return `<select class="form-select-survey" onchange="answers['${key}']=this.value;updateProgress()">
+        <option value="">Selecciona una opción…</option>
+        ${(qn.options||[]).map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+      </select>`;
+
+    default:
+      return `<div class="rating-group" data-aspect="${aIdx}" data-question="${qIdx}">
+        ${[1,2,3,4,5].map(n => `<button class="rating-btn" data-val="${n}">${n}</button>`).join('')}
+      </div>`;
+  }
+}
+
+window.selectYesNo = function(btn, key) {
+  const group = btn.closest('.yesno-group');
+  group.querySelectorAll('.yesno-btn').forEach(b => b.className = 'rating-btn yesno-btn');
+  btn.classList.add('selected-5');
+  answers[key] = btn.dataset.val;
+  updateProgress();
+};
+
+window.updateCheckbox = function(key, input) {
+  const group = input.closest('.options-group');
+  const checked = Array.from(group.querySelectorAll('input:checked')).map(i => i.value);
+  answers[key] = checked.length ? checked.join(', ') : null;
+  updateProgress();
+};
+
 // ── Renderizar encuesta ───────────────────────────────────
 function renderSurvey() {
   document.getElementById('headerTitle').textContent  = surveyData.title || 'Encuesta de Valoración';
@@ -99,22 +167,30 @@ function renderSurvey() {
     if (!aspect.active) return;
     const card = document.createElement('div');
     card.className = 'card aspect-card';
+
+    const questionsHtml = (aspect.questions || []).map((q, qIdx) => {
+      // Normalizar pregunta (compatibilidad con formato antiguo string)
+      const qn = typeof q === 'string' ? { text: q, type: 'scale', options: [] } : q;
+      const inputHtml = renderQuestionInput(qn, aIdx, qIdx);
+      const needsComment = qn.type === 'scale'; // solo escala tiene comentario por pregunta
+      return `
+        <div class="question-row">
+          <label class="question-label">${qn.text}</label>
+          ${inputHtml}
+          ${needsComment ? `<textarea class="comment-input question-comment"
+            data-question-comment="${aIdx}_${qIdx}"
+            placeholder="Comentario (opcional)…" rows="2"></textarea>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    const isTwoCol = aspect.twoColumns === true;
     card.innerHTML = `
       <div class="aspect-header">
         <span class="aspect-icon">${aspect.icon || '📋'}</span>
         <h3 class="aspect-title">${aspect.title}</h3>
       </div>
-      ${(aspect.questions || []).map((q, qIdx) => `
-        <div class="question-row">
-          <label class="question-label">${q}</label>
-          <div class="rating-group" data-aspect="${aIdx}" data-question="${qIdx}">
-            ${[1,2,3,4,5].map(n => `<button class="rating-btn" data-val="${n}">${n}</button>`).join('')}
-          </div>
-          <textarea class="comment-input question-comment"
-            data-question-comment="${aIdx}_${qIdx}"
-            placeholder="Comentario (opcional)…" rows="2"></textarea>
-        </div>
-      `).join('')}
+      ${isTwoCol ? `<div class="two-col-grid">${questionsHtml}</div>` : questionsHtml}
       <div class="comment-wrap">
         <label class="comment-label">Comentario sobre este aspecto <span class="optional">(opcional)</span></label>
         <textarea class="comment-input" data-aspect-comment="${aIdx}"
@@ -170,12 +246,18 @@ window.showReview = function() {
   (surveyData.aspects || []).forEach((a, aIdx) => {
     if (!a.active) return;
     (a.questions || []).forEach((q, qIdx) => {
+      const qn = typeof q === 'string' ? { text:q, type:'scale' } : q;
+      // text y checkbox son opcionales
+      if (qn.type === 'text' || qn.type === 'checkbox') return;
       if (!answers[`${aIdx}_${qIdx}`]) {
         hasError = true;
-        const group = document.querySelector(`.rating-group[data-aspect="${aIdx}"][data-question="${qIdx}"]`);
+        const group = document.querySelector(`.rating-group[data-aspect="${aIdx}"][data-question="${qIdx}"]`)
+          || document.querySelector(`.options-group[data-key="${aIdx}_${qIdx}"]`)
+          || document.querySelector(`[data-key="${aIdx}_${qIdx}"]`);
         if (group) {
-          group.querySelectorAll('.rating-btn').forEach(b => b.classList.add('error'));
-          setTimeout(() => group.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('error')), 800);
+          group.style.outline = '2px solid var(--red)';
+          group.style.borderRadius = 'var(--rs)';
+          setTimeout(() => { group.style.outline = ''; }, 800);
         }
       }
     });
