@@ -327,3 +327,36 @@ body.dark .badge-green{ background:#14532d; color:#4ade80; }
   .token-item{ flex-direction:column; align-items:flex-start; }
   .admin-tabs .tab-btn{ font-size:11px; }
 }
+
+/* ── Botones de orden ── */
+.btn-order{
+  width:22px; height:18px;
+  border:1px solid var(--border);
+  background:var(--surface-alt);
+  color:var(--text-sec);
+  border-radius:3px;
+  font-size:10px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  padding:0; line-height:1;
+}
+.btn-order:hover:not(:disabled){ background:var(--rm-blue-bg); color:var(--rm-blue); border-color:var(--rm-blue); }
+.btn-order:disabled{ opacity:.3; cursor:not-allowed; }
+
+/* ── Modal preview encuesta ── */
+.modal-preview{
+  max-width:480px;
+  height:85vh;
+  display:flex;
+  flex-direction:column;
+}
+.modal-preview-body{
+  flex:1;
+  overflow:hidden;
+  border-radius:0 0 var(--rl) var(--rl);
+}
+.modal-preview-body iframe{
+  width:100%;
+  height:100%;
+  border:none;
+  display:block;
+}
