@@ -21,7 +21,19 @@ const show = id => $(id).style.display = '';
 const hide = id => $(id).style.display = 'none';
 
 // ── AUTH ─────────────────────────────────────────────────
+// Mostrar spinner mientras Firebase restaura la sesión
+const authSpinner = document.createElement('div');
+authSpinner.id = 'authSpinner';
+authSpinner.className = 'view-center';
+authSpinner.innerHTML = '<div class="spinner"></div><p class="loading-text">Comprobando sesión…</p>';
+document.querySelector('.main').prepend(authSpinner);
+hide('viewLogin');
+
+// Recordar última pestaña activa
+const LAST_TAB_KEY = 'admin_last_tab';
+
 onAuthStateChanged(auth, user => {
+  hide('authSpinner');
   if (user) {
     currentUser = user;
     $('adminEmail').textContent = user.email;
@@ -29,6 +41,11 @@ onAuthStateChanged(auth, user => {
     hide('viewLogin');
     show('viewDash');
     loadAllSurveys();
+    // Restaurar última pestaña
+    const lastTab = localStorage.getItem(LAST_TAB_KEY);
+    if (lastTab && document.getElementById(lastTab)) {
+      showTab(lastTab);
+    }
   } else {
     currentUser = null;
     hide('viewDash');
@@ -66,10 +83,10 @@ window.showTab = function(tabId) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   $(tabId).style.display = 'block';
   $(tabId).classList.add('active');
-  const idx = ['tabEncuestas','tabTokens','tabResultados'].indexOf(tabId);
+  const idx = ['tabEncuestas','tabResultados'].indexOf(tabId);
   document.querySelectorAll('.tab-btn')[idx]?.classList.add('active');
-
-  if (tabId === 'tabTokens')    loadTokens();
+  // Recordar pestaña activa para restaurar al refrescar
+  localStorage.setItem(LAST_TAB_KEY, tabId);
   if (tabId === 'tabResultados') loadResults();
 };
 
@@ -96,6 +113,7 @@ function renderSurveyList() {
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <span class="badge ${s.active ? 'badge-green' : 'badge-gray'}">${s.active ? 'Activa' : 'Inactiva'}</span>
         <button class="btn-copy" onclick="copyLink('${s.id}')">📋 Copiar enlace</button>
+        <button class="btn-sm" onclick="window.open('/index.html?survey=${s.id}','_blank')">👁 Ver encuesta</button>
         <button class="btn-sm" onclick="editSurvey('${s.id}')">Editar</button>
         <button class="btn-danger" onclick="toggleSurveyActive('${s.id}', ${s.active})">
           ${s.active ? 'Desactivar' : 'Activar'}
@@ -109,8 +127,6 @@ function populateSurveySelects() {
   const opts = allSurveys.map(s =>
     `<option value="${s.id}">${s.title || s.id}</option>`
   ).join('');
-  $('filterSurvey').innerHTML = '<option value="">Todas las encuestas</option>' + opts;
-  $('tokenSurveyId').innerHTML = opts;
   $('filterResultSurvey').innerHTML = '<option value="">Selecciona encuesta</option>' + opts;
 }
 
@@ -382,6 +398,16 @@ function renderResultsSummary(survey) {
         const max  = Math.max(...dist, 1);
 
         const colors = ['#dc2626','#ea580c','#ca8a04','#16a34a','#2563eb'];
+        // Recoger comentarios por pregunta de todas las respuestas
+        const qComments = allResponses
+          .map(r => r.questionComments?.[`${aIdx}_${qIdx}`])
+          .filter(Boolean);
+        const commentsHtml = qComments.length
+          ? `<div style="margin-top:6px;padding:6px 10px;background:var(--surface-alt);border-radius:var(--rs)">
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--text-mut);margin-bottom:4px">Comentarios (${qComments.length})</div>
+              ${qComments.map((c, i) => `<div style="font-size:12px;color:var(--text-sec);font-style:italic;padding:2px 0;border-bottom:1px solid var(--border-light)">${i+1}. "${c}"</div>`).join('')}
+            </div>`
+          : '';
         aspectHtml += `
           <div style="margin-bottom:10px">
             <div style="font-size:12px;color:var(--text-sec);margin-bottom:4px;font-weight:600">
@@ -396,6 +422,7 @@ function renderResultsSummary(survey) {
                 <span class="bar-count">${count}</span>
               </div>
             `).join('')}
+            ${commentsHtml}
           </div>
         `;
       });
