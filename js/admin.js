@@ -116,6 +116,7 @@ function renderSurveyList() {
         <button class="btn-danger" onclick="toggleSurveyActive('${s.id}', ${s.active})">
           ${s.active ? 'Desactivar' : 'Activar'}
         </button>
+        <button class="btn-danger" onclick="deleteSurvey('${s.id}')">🗑 Eliminar</button>
       </div>
     </div>
   `).join('');
@@ -150,6 +151,15 @@ window.copyLink = function(surveyId) {
 
 window.toggleSurveyActive = async function(id, current) {
   await updateDoc(doc(db, 'survey', id), { active: !current });
+  await loadAllSurveys();
+};
+
+window.deleteSurvey = async function(id) {
+  const survey = allSurveys.find(s => s.id === id);
+  if (!confirm(`¿Eliminar la encuesta "${survey?.title || id}"?
+
+Esta acción no se puede deshacer. Las respuestas asociadas no se eliminarán.`)) return;
+  await deleteDoc(doc(db, 'survey', id));
   await loadAllSurveys();
 };
 
