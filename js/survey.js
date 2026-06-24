@@ -1,17 +1,18 @@
-// js/survey.js
+// js/survey.js — Encuesta pública · Cantera RM
+// Acceso: index.html?survey=SURVEY_ID
+// Control de respuesta única: cookie por dispositivo
+
 import { db } from "./firebase-init.js";
 import {
-  doc, getDoc, updateDoc, addDoc,
-  collection, serverTimestamp, runTransaction
+  doc, getDoc, addDoc, collection, serverTimestamp, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-// ─── Estado global ────────────────────────────────────────
-let surveyData = null;   // config de la encuesta (de Firestore)
-let tokenId    = null;   // ID del token (doc ID en surveyTokens)
-let tokenData  = null;   // datos del token
-let answers    = {};     // { aspectId_questionIdx: score, coordinatorPersonalScore: n, … }
+// ── Estado global ─────────────────────────────────────────
+let surveyData = null;
+let surveyId   = null;
+let answers    = {};
 
-// ─── Helpers de vistas ────────────────────────────────────
+// ── Helpers DOM ───────────────────────────────────────────
 const show = id => document.getElementById(id).style.display = '';
 const hide = id => document.getElementById(id).style.display = 'none';
 
@@ -21,53 +22,58 @@ function showView(name) {
   show(name);
 }
 
-// ─── INIT ─────────────────────────────────────────────────
-(async function init() {
-  const params = new URLSearchParams(window.location.search);
-  const token  = params.get('token');
+function showInvalid(msg) {
+  document.getElementById('invalidMsg').textContent = msg;
+  showView('viewInvalid');
+}
 
-  // Sin token → redirige a admin si lleva ?admin
-  if (!token) {
-    if (params.has('admin')) return; // admin.js lo maneja
-    showInvalid("No se ha proporcionado ningún token de acceso.");
+// ── Cookie helpers ────────────────────────────────────────
+function setCookie(name, value, days) {
+  const d = new Date();
+  d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+  document.cookie = `${name}=${value};expires=${d.toUTCString()};path=/;SameSite=Strict`;
+}
+
+function getCookie(name) {
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+  return match ? match[2] : null;
+}
+
+// ── INIT ──────────────────────────────────────────────────
+(async function init() {
+  const params   = new URLSearchParams(window.location.search);
+  surveyId       = params.get('survey');
+
+  // Sin survey ID → enlace inválido
+  if (!surveyId) {
+    showInvalid("No se ha proporcionado ningún enlace de encuesta válido.");
     return;
   }
 
-  tokenId = token;
+  // Comprobar cookie — ya respondió en este dispositivo
+  const cookieKey = `survey_done_${surveyId}`;
+  if (getCookie(cookieKey)) {
+    showInvalid("Ya has completado esta encuesta en este dispositivo.");
+    return;
+  }
 
   try {
-    // 1. Leer token en Firestore
-    const tokenRef  = doc(db, "surveyTokens", token);
-    const tokenSnap = await getDoc(tokenRef);
-
-    if (!tokenSnap.exists()) {
-      showInvalid("El enlace no existe o no es válido.");
-      return;
-    }
-
-    tokenData = tokenSnap.data();
-
-    if (tokenData.used) {
-      showInvalid("Esta encuesta ya ha sido completada.");
-      return;
-    }
-    if (tokenData.active === false) {
-      showInvalid("Este enlace ha sido desactivado.");
-      return;
-    }
-
-    // 2. Leer configuración de la encuesta
-    const surveyRef  = doc(db, "survey", tokenData.surveyId);
+    // Cargar encuesta de Firestore
+    const surveyRef  = doc(db, "survey", surveyId);
     const surveySnap = await getDoc(surveyRef);
 
     if (!surveySnap.exists()) {
-      showInvalid("La encuesta asociada a este enlace no existe.");
+      showInvalid("Esta encuesta no existe.");
       return;
     }
 
     surveyData = { id: surveySnap.id, ...surveySnap.data() };
 
-    // 3. Renderizar encuesta
+    if (surveyData.active === false) {
+      showInvalid("Esta encuesta no está disponible actualmente.");
+      return;
+    }
+
     renderSurvey();
     showView('viewSurvey');
     show('progressWrap');
@@ -79,15 +85,9 @@ function showView(name) {
   }
 })();
 
-// ─── Mostrar pantalla de error ─────────────────────────────
-function showInvalid(msg) {
-  document.getElementById('invalidMsg').textContent = msg;
-  showView('viewInvalid');
-}
-
-// ─── Renderizar aspectos desde surveyData ─────────────────
+// ── Renderizar encuesta ───────────────────────────────────
 function renderSurvey() {
-  document.getElementById('headerTitle').textContent = surveyData.title || 'Encuesta de Valoración';
+  document.getElementById('headerTitle').textContent  = surveyData.title || 'Encuesta de Valoración';
   document.getElementById('headerSeason').textContent = surveyData.season || 'Cantera';
   document.getElementById('surveyTitle').textContent  = surveyData.title || '';
   document.getElementById('surveyDesc').textContent   = surveyData.description || '';
@@ -95,10 +95,8 @@ function renderSurvey() {
   const container = document.getElementById('aspectsContainer');
   container.innerHTML = '';
 
-  const aspects = surveyData.aspects || [];
-  aspects.forEach((aspect, aIdx) => {
+  (surveyData.aspects || []).forEach((aspect, aIdx) => {
     if (!aspect.active) return;
-
     const card = document.createElement('div');
     card.className = 'card aspect-card';
     card.innerHTML = `
@@ -112,7 +110,8 @@ function renderSurvey() {
           <div class="rating-group" data-aspect="${aIdx}" data-question="${qIdx}">
             ${[1,2,3,4,5].map(n => `<button class="rating-btn" data-val="${n}">${n}</button>`).join('')}
           </div>
-          <textarea class="comment-input question-comment" data-question-comment="${aIdx}_${qIdx}"
+          <textarea class="comment-input question-comment"
+            data-question-comment="${aIdx}_${qIdx}"
             placeholder="Comentario (opcional)…" rows="2"></textarea>
         </div>
       `).join('')}
@@ -125,112 +124,79 @@ function renderSurvey() {
     container.appendChild(card);
   });
 
-  // Vincular eventos a todos los rating-groups
   attachRatingEvents();
 }
 
-// ─── Eventos de botones de valoración ─────────────────────
+// ── Eventos botones 1-5 ───────────────────────────────────
 function attachRatingEvents() {
   document.querySelectorAll('.rating-group').forEach(group => {
     group.querySelectorAll('.rating-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const val = parseInt(btn.dataset.val);
-
-        // Limpiar selección anterior del grupo
-        group.querySelectorAll('.rating-btn').forEach(b => {
-          b.className = 'rating-btn';
-        });
-
-        // Marcar seleccionado
+        group.querySelectorAll('.rating-btn').forEach(b => b.className = 'rating-btn');
         btn.classList.add(`selected-${val}`);
-
-        // Guardar en answers
-        const field      = group.dataset.field;
-        const aspectIdx  = group.dataset.aspect;
-        const questionIdx= group.dataset.question;
-
-        if (field) {
-          answers[field] = val;
-        } else {
-          answers[`${aspectIdx}_${questionIdx}`] = val;
-        }
-
+        const field       = group.dataset.field;
+        const aspectIdx   = group.dataset.aspect;
+        const questionIdx = group.dataset.question;
+        if (field) answers[field] = val;
+        else answers[`${aspectIdx}_${questionIdx}`] = val;
         updateProgress();
       });
     });
   });
 }
 
-// ─── Progreso visual ───────────────────────────────────────
+// ── Progreso ──────────────────────────────────────────────
 function updateProgress() {
-  const totalRequired = countRequiredQuestions();
-  const answered      = countAnswered();
-  const pct           = totalRequired === 0 ? 0 : Math.round((answered / totalRequired) * 100);
-
+  const total    = countRequired();
+  const answered = Object.keys(answers).filter(k => answers[k] != null).length;
+  const pct      = total === 0 ? 0 : Math.round((answered / total) * 100);
   document.getElementById('progressBar').style.width = pct + '%';
-  document.getElementById('progressLabel').textContent = `${answered} / ${totalRequired}`;
+  document.getElementById('progressLabel').textContent = `${answered} / ${total}`;
 }
 
-function countRequiredQuestions() {
+function countRequired() {
   if (!surveyData) return 0;
   let count = 0;
-  (surveyData.aspects || []).forEach((a, aIdx) => {
-    if (a.active) count += (a.questions || []).length;
-  });
+  (surveyData.aspects || []).forEach(a => { if (a.active) count += (a.questions || []).length; });
   count += 5; // coordinatorPersonal, coordinatorProfessional, coachPersonal, coachProfessional, global
   return count;
 }
 
-function countAnswered() {
-  return Object.keys(answers).filter(k => answers[k] != null).length;
-}
-
-// ─── Validación previa al resumen ─────────────────────────
+// ── Validación y revisión ─────────────────────────────────
 window.showReview = function() {
-  const missing = [];
+  let hasError = false;
 
-  // Aspectos dinámicos
   (surveyData.aspects || []).forEach((a, aIdx) => {
     if (!a.active) return;
     (a.questions || []).forEach((q, qIdx) => {
-      const key = `${aIdx}_${qIdx}`;
-      if (!answers[key]) {
-        missing.push(`${a.title}: ${q}`);
-        // Marcar botones con error visual
-        const group = document.querySelector(
-          `.rating-group[data-aspect="${aIdx}"][data-question="${qIdx}"]`
-        );
-        if (group) group.querySelectorAll('.rating-btn').forEach(b => b.classList.add('error'));
-        setTimeout(() => {
-          if (group) group.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('error'));
-        }, 800);
+      if (!answers[`${aIdx}_${qIdx}`]) {
+        hasError = true;
+        const group = document.querySelector(`.rating-group[data-aspect="${aIdx}"][data-question="${qIdx}"]`);
+        if (group) {
+          group.querySelectorAll('.rating-btn').forEach(b => b.classList.add('error'));
+          setTimeout(() => group.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('error')), 800);
+        }
       }
     });
   });
 
-  // Bloques fijos
   const fixedFields = [
-    { key:'coordinatorPersonalScore',     label:'Valoración personal del coordinador' },
-    { key:'coordinatorProfessionalScore', label:'Valoración profesional del coordinador' },
-    { key:'coachPersonalScore',           label:'Valoración personal propia' },
-    { key:'coachProfessionalScore',       label:'Valoración profesional propia' },
-    { key:'globalScore',                  label:'Valoración global de la temporada' },
+    'coordinatorPersonalScore','coordinatorProfessionalScore',
+    'coachPersonalScore','coachProfessionalScore','globalScore'
   ];
-  fixedFields.forEach(({ key, label }) => {
+  fixedFields.forEach(key => {
     if (!answers[key]) {
-      missing.push(label);
+      hasError = true;
       const group = document.querySelector(`.rating-group[data-field="${key}"]`);
       if (group) {
         group.querySelectorAll('.rating-btn').forEach(b => b.classList.add('error'));
-        setTimeout(() => {
-          group.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('error'));
-        }, 800);
+        setTimeout(() => group.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('error')), 800);
       }
     }
   });
 
-  if (missing.length > 0) {
-    // Scroll al primer campo sin respuesta
+  if (hasError) {
     const firstError = document.querySelector('.rating-btn.error');
     if (firstError) firstError.closest('.card').scrollIntoView({ behavior:'smooth', block:'center' });
     return;
@@ -241,101 +207,71 @@ window.showReview = function() {
   window.scrollTo({ top:0, behavior:'smooth' });
 };
 
-// ─── Construir pantalla de revisión ───────────────────────
 function buildReview() {
   const container = document.getElementById('reviewContent');
   container.innerHTML = '';
 
-  const aspects = surveyData.aspects || [];
-  aspects.forEach((a, aIdx) => {
+  (surveyData.aspects || []).forEach((a, aIdx) => {
     if (!a.active) return;
-
     const sec = document.createElement('div');
     sec.className = 'review-section';
     sec.innerHTML = `<div class="review-section-title">${a.icon || ''} ${a.title}</div>`;
-
     (a.questions || []).forEach((q, qIdx) => {
       const score = answers[`${aIdx}_${qIdx}`];
-      const row = document.createElement('div');
-      row.className = 'review-row';
-      row.innerHTML = `
-        <span class="review-q">${q}</span>
-        <span class="review-score score-${score}">${score} / 5</span>
-      `;
-      sec.appendChild(row);
+      sec.innerHTML += `
+        <div class="review-row">
+          <span class="review-q">${q}</span>
+          <span class="review-score score-${score}">${score} / 5</span>
+        </div>`;
+      const qc = document.querySelector(`[data-question-comment="${aIdx}_${qIdx}"]`)?.value?.trim();
+      if (qc) sec.innerHTML += `<div class="review-comment">"${qc}"</div>`;
     });
-
-    const comment = document.querySelector(`[data-aspect-comment="${aIdx}"]`)?.value?.trim();
-    if (comment) {
-      const c = document.createElement('div');
-      c.className = 'review-comment';
-      c.textContent = `"${comment}"`;
-      sec.appendChild(c);
-    }
-
+    const ac = document.querySelector(`[data-aspect-comment="${aIdx}"]`)?.value?.trim();
+    if (ac) sec.innerHTML += `<div class="review-comment">"${ac}"</div>`;
     container.appendChild(sec);
   });
 
   // Bloques fijos
   const fixedSec = document.createElement('div');
   fixedSec.className = 'review-section';
-  fixedSec.innerHTML = `<div class="review-section-title">👤 Coordinador / Técnico / Global</div>`;
-
-  const fixedRows = [
-    { label:'Val. personal coordinador',      key:'coordinatorPersonalScore' },
-    { label:'Val. profesional coordinador',   key:'coordinatorProfessionalScore' },
-    { label:'Val. personal propia',           key:'coachPersonalScore' },
-    { label:'Val. profesional propia',        key:'coachProfessionalScore' },
-    { label:'Valoración global temporada',    key:'globalScore' },
-  ];
-  fixedRows.forEach(({ label, key }) => {
-    const score = answers[key];
-    const row = document.createElement('div');
-    row.className = 'review-row';
-    row.innerHTML = `
-      <span class="review-q">${label}</span>
-      <span class="review-score score-${score}">${score} / 5</span>
-    `;
-    fixedSec.appendChild(row);
-  });
-
-  // Comentarios fijos
-  ['coordinatorComment','coachComment','finalComment'].forEach(field => {
-    const val = document.querySelector(`[data-field="${field}"]`)?.value?.trim();
-    if (val) {
-      const c = document.createElement('div');
-      c.className = 'review-comment';
-      c.textContent = `"${val}"`;
-      fixedSec.appendChild(c);
-    }
-  });
-
+  fixedSec.innerHTML = `<div class="review-section-title">💼 Profesional / 👤 Personal / ⭐ Global</div>
+    ${[
+      { label:'Val. profesional coordinador', key:'coordinatorProfessionalScore' },
+      { label:'Val. profesional propia',      key:'coachProfessionalScore' },
+      { label:'Val. personal coordinador',    key:'coordinatorPersonalScore' },
+      { label:'Val. personal propia',         key:'coachPersonalScore' },
+      { label:'Valoración global',            key:'globalScore' },
+    ].map(({ label, key }) => `
+      <div class="review-row">
+        <span class="review-q">${label}</span>
+        <span class="review-score score-${answers[key]}">${answers[key]} / 5</span>
+      </div>
+    `).join('')}`;
   container.appendChild(fixedSec);
 }
 
-// ─── Volver a editar desde revisión ───────────────────────
 window.backToSurvey = function() {
   showView('viewSurvey');
   window.scrollTo({ top:0, behavior:'smooth' });
 };
 
-// ─── ENVIAR ENCUESTA ──────────────────────────────────────
+// ── ENVIAR ────────────────────────────────────────────────
 window.submitSurvey = async function() {
   const btn = document.getElementById('btnConfirm');
   btn.disabled = true;
   btn.textContent = 'Enviando…';
 
   try {
-    // Recoger comentarios desde el DOM
-    const aspectComments = {};
+    // Recoger comentarios
+    const aspectComments   = {};
     const questionComments = {};
     (surveyData.aspects || []).forEach((a, aIdx) => {
       if (!a.active) return;
-      const val = document.querySelector(`[data-aspect-comment="${aIdx}"]`)?.value?.trim();
-      if (val) aspectComments[aIdx] = val;
+      const ac = document.querySelector(`[data-aspect-comment="${aIdx}"]`)?.value?.trim();
+      if (ac) aspectComments[aIdx] = ac;
       (a.questions || []).forEach((_, qIdx) => {
-        const qVal = document.querySelector(`[data-question-comment="${aIdx}_${qIdx}"]`)?.value?.trim();
-        if (qVal) questionComments[`${aIdx}_${qIdx}`] = qVal;
+        const qc = document.querySelector(`[data-question-comment="${aIdx}_${qIdx}"]`)?.value?.trim();
+        if (qc) questionComments[`${aIdx}_${qIdx}`] = qc;
       });
     });
 
@@ -343,65 +279,37 @@ window.submitSurvey = async function() {
     const coachComment       = document.querySelector('[data-field="coachComment"]')?.value?.trim()       || '';
     const finalComment       = document.querySelector('[data-field="finalComment"]')?.value?.trim()       || '';
 
-    // Calcular medias por aspecto
+    // Calcular medias
     const aspectAverages = {};
     (surveyData.aspects || []).forEach((a, aIdx) => {
       if (!a.active) return;
       const scores = (a.questions || []).map((_, qIdx) => answers[`${aIdx}_${qIdx}`]).filter(Boolean);
-      if (scores.length) {
-        aspectAverages[a.title] = +(scores.reduce((s,v) => s+v, 0) / scores.length).toFixed(2);
-      }
+      if (scores.length) aspectAverages[a.title] = +(scores.reduce((s,v)=>s+v,0)/scores.length).toFixed(2);
     });
+    const allAvgs = Object.values(aspectAverages);
+    const globalAverage = allAvgs.length ? +(allAvgs.reduce((s,v)=>s+v,0)/allAvgs.length).toFixed(2) : null;
 
-    // Media global (todas las preguntas de aspectos)
-    const allAspectScores = Object.values(aspectAverages);
-    const globalAverage = allAspectScores.length
-      ? +(allAspectScores.reduce((s,v) => s+v, 0) / allAspectScores.length).toFixed(2)
-      : null;
-
-    // Construir objeto de respuesta
-    const responseData = {
-      surveyId:                   surveyData.id,
-      token:                      tokenId,
-      submittedAt:                serverTimestamp(),
-      answers:                    answers,
-      aspectComments:             aspectComments,
-      questionComments:           questionComments,
-      aspectAverages:             aspectAverages,
-      globalAverage:              globalAverage,
-      coordinatorPersonalScore:   answers.coordinatorPersonalScore,
+    // Guardar respuesta
+    await addDoc(collection(db, 'surveyResponses'), {
+      surveyId,
+      submittedAt:                  serverTimestamp(),
+      answers,
+      aspectComments,
+      questionComments,
+      aspectAverages,
+      globalAverage,
+      coordinatorPersonalScore:     answers.coordinatorPersonalScore,
       coordinatorProfessionalScore: answers.coordinatorProfessionalScore,
-      coordinatorComment:         coordinatorComment,
-      coachPersonalScore:         answers.coachPersonalScore,
-      coachProfessionalScore:     answers.coachProfessionalScore,
-      coachComment:               coachComment,
-      globalScore:                answers.globalScore,
-      finalComment:               finalComment,
-    };
-
-    // Transacción atómica: crear respuesta + marcar token como usado
-    const tokenRef    = doc(db, "surveyTokens", tokenId);
-    const responsesRef = collection(db, "surveyResponses");
-
-    let responseId;
-
-    await runTransaction(db, async (transaction) => {
-      const tokenSnap = await transaction.get(tokenRef);
-
-      if (!tokenSnap.exists() || tokenSnap.data().used) {
-        throw new Error("Token ya utilizado o no existe.");
-      }
-
-      const newResponseRef = doc(responsesRef);
-      responseId = newResponseRef.id;
-
-      transaction.set(newResponseRef, responseData);
-      transaction.update(tokenRef, {
-        used:       true,
-        usedAt:     serverTimestamp(),
-        responseId: responseId,
-      });
+      coordinatorComment,
+      coachPersonalScore:           answers.coachPersonalScore,
+      coachProfessionalScore:       answers.coachProfessionalScore,
+      coachComment,
+      globalScore:                  answers.globalScore,
+      finalComment,
     });
+
+    // Marcar cookie — 365 días
+    setCookie(`survey_done_${surveyId}`, '1', 365);
 
     showView('viewSent');
     hide('progressWrap');
@@ -410,6 +318,6 @@ window.submitSurvey = async function() {
     console.error(err);
     btn.disabled = false;
     btn.textContent = 'Enviar encuesta definitivamente';
-    alert('Error al enviar la encuesta: ' + err.message + '\nInténtalo de nuevo.');
+    alert('Error al enviar. Inténtalo de nuevo.\n' + err.message);
   }
 };
