@@ -115,10 +115,11 @@ function populateSurveySelects() {
 }
 
 window.copyLink = function(surveyId) {
-  // El enlace requiere un token, copiamos la base con instrucción
-  const base = `${location.origin}/index.html?token=`;
-  navigator.clipboard.writeText(base).then(() => {
-    alert('Base del enlace copiada. Añade el token al final:\n' + base + 'TOKEN_AQUI');
+  const link = `${location.origin}/index.html?survey=${surveyId}`;
+  navigator.clipboard.writeText(link).then(() => {
+    alert('Enlace copiado:\n' + link);
+  }).catch(() => {
+    prompt('Copia este enlace:', link);
   });
 };
 
