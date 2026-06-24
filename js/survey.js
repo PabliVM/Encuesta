@@ -51,8 +51,10 @@ function getCookie(name) {
   }
 
   // Comprobar cookie — ya respondió en este dispositivo
+  // En modo preview (desde el admin) se salta esta comprobación
+  const isPreview = params.get('preview') === '1';
   const cookieKey = `survey_done_${surveyId}`;
-  if (getCookie(cookieKey)) {
+  if (!isPreview && getCookie(cookieKey)) {
     showInvalid("Ya has completado esta encuesta en este dispositivo.");
     return;
   }
@@ -316,6 +318,11 @@ window.backToSurvey = function() {
 
 // ── ENVIAR ────────────────────────────────────────────────
 window.submitSurvey = async function() {
+  // En modo preview no se guarda nada
+  if (new URLSearchParams(window.location.search).get('preview') === '1') {
+    alert('Modo preview — las respuestas no se guardan.');
+    return;
+  }
   const btn = document.getElementById('btnConfirm');
   btn.disabled = true;
   btn.textContent = 'Enviando…';
