@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Admin · Cantera RM</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-logo">
+    <img src="https://raw.githubusercontent.com/PabliVM/Survey/main/rm.png" alt="Escudo RM">
+  </div>
+  <div class="header-title-wrap">
+    <h1 class="doc-title">Panel de Administración</h1>
+    <span class="doc-season" id="adminEmail"></span>
+  </div>
+  <button class="btn-dark" onclick="toggleDark()" id="darkBtn">☾</button>
+  <button class="btn-logout" id="btnLogout" onclick="logout()" style="display:none">Salir</button>
+</header>
+
+<main class="main admin-main">
+
+  <!-- ── VISTA: LOGIN ── -->
+  <div id="viewLogin" class="view-center">
+    <div class="card login-card">
+      <div class="login-logo">
+        <img src="https://raw.githubusercontent.com/PabliVM/Survey/main/rm.png" alt="RM">
+      </div>
+      <h2 class="login-title">Acceso Administrador</h2>
+      <p class="login-sub">Cantera del Real Madrid CF</p>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" id="loginEmail" placeholder="usuario@realmadrid.es">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contraseña</label>
+        <input class="form-input" type="password" id="loginPass" placeholder="••••••••"
+          onkeydown="if(event.key==='Enter') doLogin()">
+      </div>
+      <p class="login-error" id="loginError"></p>
+      <button class="btn-submit" id="btnLogin" onclick="doLogin()">Entrar</button>
+    </div>
+  </div>
+
+  <!-- ── VISTA: DASHBOARD ── -->
+  <div id="viewDash" style="display:none">
+
+    <!-- TABS -->
+    <div class="admin-tabs">
+      <button class="tab-btn active" onclick="showTab('tabEncuestas')">📋 Encuestas</button>
+      <button class="tab-btn" onclick="showTab('tabTokens')">🔑 Tokens</button>
+      <button class="tab-btn" onclick="showTab('tabResultados')">📊 Resultados</button>
+    </div>
+
+    <!-- TAB: ENCUESTAS -->
+    <div id="tabEncuestas" class="tab-content">
+      <div class="tab-header">
+        <h2 class="tab-title">Encuestas</h2>
+        <button class="btn-primary" onclick="openNewSurvey()">+ Nueva encuesta</button>
+      </div>
+      <div id="surveyList"></div>
+    </div>
+
+    <!-- TAB: TOKENS -->
+    <div id="tabTokens" class="tab-content" style="display:none">
+      <div class="tab-header">
+        <h2 class="tab-title">Gestión de Tokens</h2>
+        <button class="btn-primary" onclick="openGenTokens()">+ Generar tokens</button>
+      </div>
+      <div class="filter-row">
+        <select class="form-select" id="filterSurvey" onchange="loadTokens()">
+          <option value="">Todas las encuestas</option>
+        </select>
+        <select class="form-select" id="filterUsed" onchange="loadTokens()">
+          <option value="">Todos</option>
+          <option value="false">Pendientes</option>
+          <option value="true">Usados</option>
+        </select>
+      </div>
+      <div id="tokenList"></div>
+    </div>
+
+    <!-- TAB: RESULTADOS -->
+    <div id="tabResultados" class="tab-content" style="display:none">
+      <div class="tab-header">
+        <h2 class="tab-title">Resultados</h2>
+        <button class="btn-secondary" onclick="exportCSV()">⬇ Exportar CSV</button>
+      </div>
+      <div class="filter-row">
+        <select class="form-select" id="filterResultSurvey" onchange="loadResults()">
+          <option value="">Selecciona encuesta</option>
+        </select>
+      </div>
+      <div id="resultsSummary"></div>
+      <div id="resultsList"></div>
+    </div>
+
+  </div>
+
+</main>
+
+<!-- MODAL: NUEVA / EDITAR ENCUESTA -->
+<div class="modal-overlay" id="modalSurvey" style="display:none">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="modalSurveyTitle">Nueva encuesta</h3>
+      <button class="modal-close" onclick="closeModal('modalSurvey')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Título</label>
+        <input class="form-input" id="surveyTitle" placeholder="Encuesta de Valoración 2025/2026">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripción</label>
+        <textarea class="form-input" id="surveyDesc" rows="2" placeholder="Valora los siguientes aspectos…"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Temporada</label>
+        <input class="form-input" id="surveySeason" placeholder="2025/2026">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Estado</label>
+        <select class="form-select" id="surveyActive">
+          <option value="true">Activa</option>
+          <option value="false">Inactiva</option>
+        </select>
+      </div>
+
+      <!-- ASPECTOS -->
+      <div class="aspects-editor">
+        <div class="aspects-editor-header">
+          <span class="form-label">Aspectos y preguntas</span>
+          <button class="btn-sm" onclick="addAspect()">+ Aspecto</button>
+        </div>
+        <div id="aspectsEditor"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('modalSurvey')">Cancelar</button>
+      <button class="btn-primary" onclick="saveSurvey()">Guardar encuesta</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: GENERAR TOKENS -->
+<div class="modal-overlay" id="modalTokens" style="display:none">
+  <div class="modal-box modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title">Generar tokens</h3>
+      <button class="modal-close" onclick="closeModal('modalTokens')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Encuesta</label>
+        <select class="form-select" id="tokenSurveyId"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cantidad de tokens</label>
+        <input class="form-input" type="number" id="tokenQty" value="1" min="1" max="50">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('modalTokens')">Cancelar</button>
+      <button class="btn-primary" onclick="generateTokens()">Generar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALLE RESPUESTA -->
+<div class="modal-overlay" id="modalResponse" style="display:none">
+  <div class="modal-box modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">Detalle de respuesta</h3>
+      <button class="modal-close" onclick="closeModal('modalResponse')">✕</button>
+    </div>
+    <div class="modal-body" id="modalResponseBody"></div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer class="app-footer">
+  Cantera del Real Madrid CF · Panel de Administración
+</footer>
+
+<script type="module" src="js/firebase-init.js"></script>
+<script type="module" src="js/admin.js"></script>
+<script>
+function toggleDark(){
+  document.body.classList.toggle('dark');
+  localStorage.setItem('dark', document.body.classList.contains('dark'));
+  document.getElementById('darkBtn').innerHTML = document.body.classList.contains('dark') ? '☀' : '☾';
+}
+if(localStorage.getItem('dark')==='true'){ document.body.classList.add('dark'); document.getElementById('darkBtn').innerHTML='☀'; }
+</script>
+</body>
+</html>
