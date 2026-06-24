@@ -2,18 +2,20 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Setup 3 — Añadir bloques fijos</title>
+<title>Setup 2 — Añadir bloques fijos</title>
 <style>
-body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; }
-button { padding: 12px 24px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }
-pre { background: #f0f2f5; padding: 16px; border-radius: 8px; font-size: 12px; margin-top: 20px; white-space: pre-wrap; }
+  body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; }
+  button { padding: 12px 24px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }
+  pre { background: #f0f2f5; padding: 16px; border-radius: 8px; font-size: 12px; margin-top: 20px; white-space: pre-wrap; }
 </style>
 </head>
 <body>
-<h2>Añadir bloques fijos al final de la encuesta</h2>
-<p>Añade Valoración Profesional, Personal y Global a <code>TemzWgBuv8oz8i0Vwckq</code>.</p>
+<h2>Añadir bloques Profesional / Personal / Global</h2>
+<p>Añade los 3 bloques finales como aspectos normales a la encuesta <code>TemzWgBuv8oz8i0Vwckq</code>.</p>
+<p><strong>Ejecutar solo una vez.</strong></p>
 <button onclick="run()">Ejecutar</button>
 <pre id="log">Esperando…</pre>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -25,55 +27,58 @@ const app = initializeApp({
 });
 const db = getFirestore(app);
 
+const fixedAspects = [
+  {
+    title: "Valoración Profesional",
+    icon: "💼",
+    active: true,
+    isFixed: true,
+    twoColumns: true,
+    questions: [
+      { text: "Valoración profesional del coordinador", type: "scale", options: [] },
+      { text: "Valoración profesional propia",          type: "scale", options: [] },
+    ]
+  },
+  {
+    title: "Valoración Personal",
+    icon: "👤",
+    active: true,
+    isFixed: true,
+    twoColumns: true,
+    questions: [
+      { text: "Valoración personal del coordinador", type: "scale", options: [] },
+      { text: "Valoración personal propia",          type: "scale", options: [] },
+    ]
+  },
+  {
+    title: "Valoración Global",
+    icon: "⭐",
+    active: true,
+    isFixed: true,
+    twoColumns: false,
+    questions: [
+      { text: "Valoración global de la temporada", type: "scale", options: [] },
+    ]
+  }
+];
+
 window.run = async function() {
   const log = document.getElementById('log');
-  log.textContent = 'Ejecutando…';
+  log.textContent = 'Cargando…';
   try {
     const ref  = doc(db, "survey", "TemzWgBuv8oz8i0Vwckq");
     const snap = await getDoc(ref);
-    const aspects = snap.data().aspects || [];
+    const current = snap.data();
+    const aspects = current.aspects || [];
 
-    // Quitar bloques fijos anteriores si existen
+    // Eliminar bloques fijos anteriores si existen
     const clean = aspects.filter(a => !a.isFixed);
 
-    const fixedAspects = [
-      {
-        title: "Valoración Profesional",
-        icon: "💼",
-        active: true,
-        isFixed: true,
-        twoColumns: true,
-        questions: [
-          { text: "Valoración profesional del coordinador", type: "scale", options: [] },
-          { text: "Valoración profesional propia", type: "scale", options: [] }
-        ]
-      },
-      {
-        title: "Valoración Personal",
-        icon: "👤",
-        active: true,
-        isFixed: true,
-        twoColumns: true,
-        questions: [
-          { text: "Valoración personal del coordinador", type: "scale", options: [] },
-          { text: "Valoración personal propia", type: "scale", options: [] }
-        ]
-      },
-      {
-        title: "Valoración Global",
-        icon: "⭐",
-        active: true,
-        isFixed: true,
-        twoColumns: false,
-        questions: [
-          { text: "Valoración global de la temporada", type: "scale", options: [] }
-        ]
-      }
-    ];
-
+    // Añadir los nuevos al final
     const updated = [...clean, ...fixedAspects];
+
     await updateDoc(ref, { aspects: updated });
-    log.textContent = '✅ Hecho. Total aspectos: ' + updated.length + '\n' + updated.map((a,i) => `${i}: ${a.title}`).join('\n');
+    log.textContent = '✅ Hecho. Aspectos actualizados:\n' + updated.map(a => a.title).join('\n');
   } catch(e) {
     log.textContent = '❌ Error: ' + e.message;
   }
