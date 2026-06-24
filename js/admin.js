@@ -556,44 +556,98 @@ function renderResultsSummary(survey) {
           </div>
       `;
       questions.forEach((q, qIdx) => {
-        const scores = allResponses
-          .map(r => r.answers?.[`${aIdx}_${qIdx}`])
-          .filter(Boolean);
-        const avg = scores.length
-          ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1)
-          : '—';
-        const dist = [1,2,3,4,5].map(v => scores.filter(s=>s===v).length);
-        const max  = Math.max(...dist, 1);
-
-        const colors = ['#dc2626','#ea580c','#ca8a04','#16a34a','#2563eb'];
-        // Recoger comentarios por pregunta de todas las respuestas
-        const qComments = allResponses
-          .map(r => r.questionComments?.[`${aIdx}_${qIdx}`])
-          .filter(Boolean);
-        const commentsHtml = qComments.length
-          ? `<div style="margin-top:6px;padding:6px 10px;background:var(--surface-alt);border-radius:var(--rs)">
-              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--text-mut);margin-bottom:4px">Comentarios (${qComments.length})</div>
-              ${qComments.map((c, i) => `<div style="font-size:12px;color:var(--text-sec);font-style:italic;padding:2px 0;border-bottom:1px solid var(--border-light)">${i+1}. "${c}"</div>`).join('')}
-            </div>`
-          : '';
         const qText = typeof q === 'string' ? q : (q.text || '—');
-        aspectHtml += `
-          <div style="margin-bottom:10px">
-            <div style="font-size:12px;color:var(--text-sec);margin-bottom:4px;font-weight:600">
-              ${qText} <span style="color:var(--rm-blue);font-weight:800">${avg}</span>
-            </div>
-            ${dist.map((count, i) => `
+        const qType = typeof q === 'string' ? 'scale' : (q.type || 'scale');
+        const allAnswers = allResponses.map(r => r.answers?.[`${aIdx}_${qIdx}`]).filter(v => v != null && v !== '');
+
+        // Comentarios por pregunta
+        const qComments = allResponses.map(r => r.questionComments?.[`${aIdx}_${qIdx}`]).filter(Boolean);
+        const commentsHtml = qComments.length ? `
+          <div style="margin-top:6px;padding:6px 10px;background:var(--surface-alt);border-radius:var(--rs)">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--text-mut);margin-bottom:4px">Comentarios (${qComments.length})</div>
+            ${qComments.map((c,i) => `<div style="font-size:12px;color:var(--text-sec);font-style:italic;padding:2px 0;border-bottom:1px solid var(--border-light)">${i+1}. "${c}"</div>`).join('')}
+          </div>` : '';
+
+        let qBodyHtml = '';
+
+        if (qType === 'scale') {
+          // Barras 1-5
+          const scores = allAnswers.map(v => parseInt(v)).filter(v => !isNaN(v));
+          const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
+          const dist = [1,2,3,4,5].map(v => scores.filter(s=>s===v).length);
+          const max  = Math.max(...dist, 1);
+          const colors = ['#dc2626','#ea580c','#ca8a04','#16a34a','#2563eb'];
+          qBodyHtml = `
+            <div style="font-size:11px;color:var(--text-mut);margin-bottom:4px">${scores.length} respuesta(s) · Media: <strong style="color:var(--rm-blue)">${avg}</strong></div>
+            ${dist.map((count,i) => `
               <div class="bar-row">
                 <span class="bar-label">${i+1}</span>
-                <div class="bar-track">
-                  <div class="bar-fill" style="width:${(count/max*100).toFixed(0)}%;background:${colors[i]}"></div>
-                </div>
+                <div class="bar-track"><div class="bar-fill" style="width:${(count/max*100).toFixed(0)}%;background:${colors[i]}"></div></div>
                 <span class="bar-count">${count}</span>
-              </div>
-            `).join('')}
+              </div>`).join('')}`;
+
+        } else if (qType === 'text') {
+          // Lista de respuestas de texto
+          qBodyHtml = allAnswers.length
+            ? `<div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${allAnswers.length} respuesta(s)</div>
+               ${allAnswers.map((v,i) => `<div style="font-size:12px;color:var(--text-sec);font-style:italic;padding:4px 8px;background:var(--surface-alt);border-radius:var(--rs);margin-bottom:4px">${i+1}. "${v}"</div>`).join('')}`
+            : `<div style="font-size:11px;color:var(--text-mut)">Sin respuestas</div>`;
+
+        } else if (qType === 'yesno') {
+          // Conteo Sí / No
+          const si = allAnswers.filter(v => v === 'Sí').length;
+          const no = allAnswers.filter(v => v === 'No').length;
+          const tot = si + no || 1;
+          qBodyHtml = `
+            <div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${allAnswers.length} respuesta(s)</div>
+            <div class="bar-row">
+              <span class="bar-label" style="width:24px">Sí</span>
+              <div class="bar-track"><div class="bar-fill" style="width:${(si/tot*100).toFixed(0)}%;background:#16a34a"></div></div>
+              <span class="bar-count">${si}</span>
+            </div>
+            <div class="bar-row">
+              <span class="bar-label" style="width:24px">No</span>
+              <div class="bar-track"><div class="bar-fill" style="width:${(no/tot*100).toFixed(0)}%;background:#dc2626"></div></div>
+              <span class="bar-count">${no}</span>
+            </div>`;
+
+        } else if (qType === 'radio' || qType === 'select') {
+          // Conteo por opción
+          const counts = {};
+          allAnswers.forEach(v => { counts[v] = (counts[v]||0) + 1; });
+          const max = Math.max(...Object.values(counts), 1);
+          qBodyHtml = `
+            <div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${allAnswers.length} respuesta(s)</div>
+            ${Object.entries(counts).map(([opt,count]) => `
+              <div class="bar-row">
+                <span style="font-size:11px;color:var(--text-sec);min-width:80px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${opt}</span>
+                <div class="bar-track"><div class="bar-fill" style="width:${(count/max*100).toFixed(0)}%;background:var(--rm-blue)"></div></div>
+                <span class="bar-count">${count}</span>
+              </div>`).join('')}`;
+
+        } else if (qType === 'checkbox') {
+          // Conteo por opción (múltiple)
+          const counts = {};
+          allAnswers.forEach(v => {
+            String(v).split(', ').forEach(opt => { counts[opt] = (counts[opt]||0) + 1; });
+          });
+          const max = Math.max(...Object.values(counts), 1);
+          qBodyHtml = `
+            <div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${allAnswers.length} respuesta(s) (selección múltiple)</div>
+            ${Object.entries(counts).map(([opt,count]) => `
+              <div class="bar-row">
+                <span style="font-size:11px;color:var(--text-sec);min-width:80px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${opt}</span>
+                <div class="bar-track"><div class="bar-fill" style="width:${(count/max*100).toFixed(0)}%;background:var(--rm-blue)"></div></div>
+                <span class="bar-count">${count}</span>
+              </div>`).join('')}`;
+        }
+
+        aspectHtml += `
+          <div style="margin-bottom:14px">
+            <div style="font-size:12px;color:var(--text-sec);margin-bottom:6px;font-weight:600">${qText}</div>
+            ${qBodyHtml}
             ${commentsHtml}
-          </div>
-        `;
+          </div>`;
       });
       aspectHtml += '</div>';
       html += aspectHtml;
