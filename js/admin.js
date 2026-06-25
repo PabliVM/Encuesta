@@ -308,7 +308,11 @@ function renderAspectsEditor() {
               <select class="form-select question-type-select" onchange="changeQuestionType(${aIdx},${qIdx},this.value)" style="width:130px">
                 ${QUESTION_TYPES.map(t => `<option value="${t.value}" ${qn.type===t.value?'selected':''}>${t.label}</option>`).join('')}
               </select>
-              <button class="btn-remove" onclick="removeQuestion(${aIdx},${qIdx})">✕</button>
+              <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text-sec);white-space:nowrap;cursor:pointer;flex-shrink:0" title="Obligatorio">
+                <input type="checkbox" ${qn.required!==false?'checked':''} onchange="toggleRequired(${aIdx},${qIdx},this.checked)">
+                Oblig.
+              </label>
+              <button class="btn-remove" title="Eliminar pregunta" onclick="removeQuestion(${aIdx},${qIdx})">✕</button>
             </div>
             ${renderOptionsEditor(aIdx, qIdx, qn.options)}
           </div>`;
@@ -371,6 +375,7 @@ window.addAspect = function() {
 
 window.removeAspect = function(idx) {
   syncAspectsFromDOM();
+  if (!confirm('¿Eliminar esta sección y todas sus preguntas?')) return;
   aspectsData.splice(idx, 1);
   renderAspectsEditor();
 };
@@ -378,8 +383,19 @@ window.removeAspect = function(idx) {
 window.addQuestion = function(aIdx) {
   syncAspectsFromDOM();
   if (!aspectsData[aIdx].questions) aspectsData[aIdx].questions = [];
-  aspectsData[aIdx].questions.push({ text:'', type:'scale', options:[] });
+  aspectsData[aIdx].questions.push({ text:'', type:'scale', options:[], required:true });
   renderAspectsEditor();
+};
+
+window.removeQuestion = function(aIdx, qIdx) {
+  syncAspectsFromDOM();
+  aspectsData[aIdx].questions.splice(qIdx, 1);
+  renderAspectsEditor();
+};
+
+window.toggleRequired = function(aIdx, qIdx, val) {
+  syncAspectsFromDOM();
+  aspectsData[aIdx].questions[qIdx].required = val;
 };
 
 
