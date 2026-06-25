@@ -251,8 +251,9 @@ window.showReview = function() {
     if (!a.active) return;
     (a.questions || []).forEach((q, qIdx) => {
       const qn = typeof q === 'string' ? { text:q, type:'scale' } : q;
-      // text y checkbox son opcionales
-      if (qn.type === 'text' || qn.type === 'checkbox') return;
+      // Respetar campo required (por defecto true salvo text y checkbox)
+      const isRequired = qn.required !== false && qn.type !== 'text' && qn.type !== 'checkbox';
+      if (!isRequired) return;
       if (!answers[`${aIdx}_${qIdx}`]) {
         hasError = true;
         const group = document.querySelector(`.rating-group[data-aspect="${aIdx}"][data-question="${qIdx}"]`)
