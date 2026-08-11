@@ -162,7 +162,6 @@ function renderGroupsInput(key) {
           <input class="form-input groups-dist-input" id="gdist_${key}"
             placeholder="ej: 5+5 o 4+3+3" style="flex:1;height:36px"
             oninput="validateGroupDist('${key}')">
-          <button class="btn-sm" onclick="autoDistribute('${key}')">Auto</button>
         </div>
         <div class="groups-error" id="gerr_${key}" style="display:none"></div>
         <button class="btn-primary" style="margin-top:10px;height:36px" onclick="generateGroups('${key}')">
