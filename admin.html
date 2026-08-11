@@ -75,7 +75,7 @@
         <div class="tab-header">
           <button class="btn-secondary" onclick="backToResultsList()">← Volver</button>
           <h2 class="tab-title" id="resultsDetailTitle"></h2>
-          <button class="btn-secondary" onclick="exportCSV()">⬇ CSV</button>
+          <button class="btn-secondary" onclick="exportCSV()">⬇ Excel</button>
         </div>
         <div id="resultsSummary"></div>
         <div id="resultsList"></div>
@@ -112,6 +112,17 @@
           <option value="true">Activa</option>
           <option value="false">Inactiva</option>
         </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Control de acceso</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="surveyLimitDevice">
+          Limitar a una respuesta por dispositivo (cookie)
+        </label>
+        <p style="font-size:11px;color:var(--text-mut);margin-top:4px">
+          Si está activo, cada dispositivo solo podrá responder una vez. Desactívalo para hacer pruebas.
+        </p>
       </div>
 
       <!-- ESCALA DE VALORACIÓN -->
