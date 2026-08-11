@@ -132,12 +132,183 @@ function renderQuestionInput(qn, aIdx, qIdx) {
         <option value="">Selecciona una opción…</option>
         ${(qn.options||[]).map(opt => `<option value="${opt}">${opt}</option>`).join('')}
       </select>`;
+    case 'groups':
+      return renderGroupsInput(key);
+
     default:
       return `<div class="rating-group" data-aspect="${aIdx}" data-question="${qIdx}">
         ${[1,2,3,4,5].map(n => `<button class="rating-btn" data-val="${n}">${n}</button>`).join('')}
       </div>`;
   }
 }
+
+// ── TIPO GRUPOS ───────────────────────────────────────────
+function renderGroupsInput(key) {
+  // Si ya hay datos guardados, restaurar directamente
+  const saved = window.answers[key];
+  if (saved && saved.groups) {
+    return renderGroupsFromData(key, saved);
+  }
+  return `
+    <div class="groups-wrap" id="gw_${key}">
+      <div class="groups-step" id="gstep1_${key}">
+        <div class="groups-row">
+          <label class="groups-label">Total de personas</label>
+          <input class="form-input groups-num-input" id="gtotal_${key}" type="number" min="1" max="100"
+            placeholder="ej: 10" style="width:90px;height:36px">
+        </div>
+        <div class="groups-row" style="margin-top:8px">
+          <label class="groups-label">Distribución</label>
+          <input class="form-input groups-dist-input" id="gdist_${key}"
+            placeholder="ej: 5+5 o 4+3+3" style="flex:1;height:36px"
+            oninput="validateGroupDist('${key}')">
+          <button class="btn-sm" onclick="autoDistribute('${key}')">Auto</button>
+        </div>
+        <div class="groups-error" id="gerr_${key}" style="display:none"></div>
+        <button class="btn-primary" style="margin-top:10px;height:36px" onclick="generateGroups('${key}')">
+          Generar grupos
+        </button>
+      </div>
+      <div id="ggroups_${key}"></div>
+    </div>`;
+}
+
+function renderGroupsFromData(key, data) {
+  const groupsHtml = data.groups.map((g, gi) => `
+    <div class="group-card">
+      <div class="group-header">Grupo ${gi + 1} <span style="font-size:11px;color:var(--text-mut)">(${g.members.length + 1} personas)</span></div>
+      <div class="group-member group-responsible">
+        <span class="group-resp-badge">Responsable</span>
+        <input class="form-input group-name-input" type="text"
+          placeholder="Nombre responsable"
+          value="${(g.responsible||'').replace(/"/g,'&quot;')}"
+          oninput="updateGroupMember('${key}',${gi},'responsible',this.value)">
+      </div>
+      ${g.members.map((m, mi) => `
+        <div class="group-member">
+          <span class="group-member-num">${mi + 2}</span>
+          <input class="form-input group-name-input" type="text"
+            placeholder="Nombre ${mi + 2}"
+            value="${(m||'').replace(/"/g,'&quot;')}"
+            oninput="updateGroupMember('${key}',${gi},'member',this.value,${mi})">
+        </div>`).join('')}
+    </div>`).join('');
+
+  return `
+    <div class="groups-wrap" id="gw_${key}">
+      <div class="groups-meta">
+        <span class="groups-meta-text">Total: <strong>${data.total}</strong> · Distribución: <strong>${data.distribution.join('+')} </strong></span>
+        <button class="btn-highlight-remove" onclick="resetGroups('${key}')">Reconfigurar</button>
+      </div>
+      <div id="ggroups_${key}" class="groups-grid">${groupsHtml}</div>
+    </div>`;
+}
+
+// Distribuir automáticamente
+window.autoDistribute = function(key) {
+  const total = parseInt(document.getElementById(`gtotal_${key}`)?.value);
+  if (!total || total < 1) { alert('Introduce primero el total de personas.'); return; }
+  const distInput = document.getElementById(`gdist_${key}`);
+  if (!distInput) return;
+  // Pedir número de grupos si distribución vacía
+  const existing = distInput.value.trim();
+  if (!existing) {
+    const ng = parseInt(prompt('¿En cuántos grupos?', '2'));
+    if (!ng || ng < 1) return;
+    const base = Math.floor(total / ng);
+    const rem  = total % ng;
+    const dist = Array.from({length: ng}, (_, i) => i < rem ? base + 1 : base);
+    distInput.value = dist.join('+');
+  } else {
+    // Re-balancear con el mismo número de grupos
+    const parts = existing.split('+').filter(Boolean);
+    const ng = parts.length || 2;
+    const base = Math.floor(total / ng);
+    const rem  = total % ng;
+    const dist = Array.from({length: ng}, (_, i) => i < rem ? base + 1 : base);
+    distInput.value = dist.join('+');
+  }
+  validateGroupDist(key);
+};
+
+// Validar distribución
+window.validateGroupDist = function(key) {
+  const total   = parseInt(document.getElementById(`gtotal_${key}`)?.value) || 0;
+  const distStr = document.getElementById(`gdist_${key}`)?.value?.trim() || '';
+  const errEl   = document.getElementById(`gerr_${key}`);
+  if (!errEl) return false;
+  if (!distStr) { errEl.style.display = 'none'; return false; }
+  const parts = distStr.split('+').map(v => parseInt(v.trim())).filter(v => !isNaN(v) && v > 0);
+  const sum   = parts.reduce((a,b) => a+b, 0);
+  if (sum !== total) {
+    errEl.textContent = `❌ La suma (${sum}) no coincide con el total (${total})`;
+    errEl.style.display = 'block';
+    errEl.style.color = 'var(--red)';
+    return false;
+  }
+  errEl.textContent = `✅ Correcto: ${parts.join(' + ')} = ${sum}`;
+  errEl.style.display = 'block';
+  errEl.style.color = 'var(--green)';
+  return true;
+};
+
+// Generar grupos
+window.generateGroups = function(key) {
+  const total   = parseInt(document.getElementById(`gtotal_${key}`)?.value);
+  const distStr = document.getElementById(`gdist_${key}`)?.value?.trim() || '';
+  if (!total) { alert('Introduce el total de personas.'); return; }
+  if (!distStr) { autoDistribute(key); return; }
+  if (!validateGroupDist(key)) return;
+
+  const dist = distStr.split('+').map(v => parseInt(v.trim())).filter(v => !isNaN(v) && v > 0);
+  const data = {
+    total,
+    distribution: dist,
+    groups: dist.map(size => ({
+      responsible: '',
+      members: Array(size - 1).fill('')
+    }))
+  };
+  window.answers[key] = data;
+  updateProgress();
+
+  // Re-render el wrap completo
+  const wrap = document.getElementById(`gw_${key}`);
+  if (wrap) wrap.outerHTML = renderGroupsFromData(key, data).replace(
+    `id="gw_${key}"`,
+    `id="gw_${key}"`
+  );
+  // Reemplazar el contenedor padre
+  const parent = document.querySelector(`[data-key-groups="${key}"]`);
+  if (parent) parent.innerHTML = renderGroupsFromData(key, data);
+};
+
+// Actualizar miembro del grupo
+window.updateGroupMember = function(key, gi, role, value, mi) {
+  const data = window.answers[key];
+  if (!data || !data.groups) return;
+  if (role === 'responsible') {
+    data.groups[gi].responsible = value;
+  } else {
+    data.groups[gi].members[mi] = value;
+  }
+  window.answers[key] = data;
+};
+
+// Reconfigurar grupos
+window.resetGroups = function(key) {
+  if (!confirm('¿Reconfigurar los grupos? Se perderán los nombres introducidos.')) return;
+  delete window.answers[key];
+  updateProgress();
+  const wrap = document.getElementById(`gw_${key}`);
+  if (wrap) wrap.outerHTML = `<div class="groups-wrap" id="gw_${key}">${renderGroupsInput(key).replace('<div class="groups-wrap" id="gw_' + key + '">', '').slice(0,-6)}</div>`;
+  // Simplest: re-render the question row
+  const parent = wrap?.closest('.question-row');
+  if (parent) {
+    const label = parent.querySelector('.question-label')?.outerHTML || '';
+    parent.innerHTML = label + renderGroupsInput(key);
+  }
+};
 
 window.selectYesNo = function(btn, key) {
   btn.closest('.yesno-group').querySelectorAll('.yesno-btn').forEach(b => b.className = 'rating-btn yesno-btn');
@@ -363,10 +534,15 @@ window.showReview = function() {
       const qn = typeof q === 'string' ? { type:'scale', required:true } : q;
       const isRequired = qn.required !== false && qn.type !== 'text' && qn.type !== 'checkbox';
       if (!isRequired) return;
-      if (!window.answers[`${aIdx}_${qIdx}`]) {
+      const ansVal   = window.answers[`${aIdx}_${qIdx}`];
+      const isMissing = qn.type === 'groups'
+        ? (!ansVal || !ansVal.groups)
+        : !ansVal;
+      if (isMissing) {
         hasError = true;
         const group = document.querySelector(`.rating-group[data-aspect="${aIdx}"][data-question="${qIdx}"]`)
-          || document.querySelector(`.options-group[data-key="${aIdx}_${qIdx}"]`);
+          || document.querySelector(`.options-group[data-key="${aIdx}_${qIdx}"]`)
+          || document.getElementById(`gw_${aIdx}_${qIdx}`);
         if (group && !firstElem) firstElem = group;
         if (group) {
           group.style.outline = '2px solid var(--red)';
@@ -400,6 +576,27 @@ function buildReview() {
       const qText = typeof q === 'string' ? q : (q.text || '—');
       const qType = typeof q === 'string' ? 'scale' : (q.type || 'scale');
       const score = window.answers[`${aIdx}_${qIdx}`];
+
+      if (qType === 'groups') {
+        const data = score;
+        if (data && data.groups) {
+          sec.innerHTML += `<div class="review-row" style="flex-direction:column;align-items:flex-start;gap:6px">
+            <span class="review-q">${qText}</span>
+            <div style="width:100%">
+              ${data.groups.map((g, gi) => `
+                <div style="margin-bottom:6px;padding:8px;background:var(--surface-alt);border-radius:var(--rs)">
+                  <div style="font-size:11px;font-weight:700;color:var(--rm-blue);margin-bottom:4px">Grupo ${gi+1}</div>
+                  <div style="font-size:12px"><strong>Responsable:</strong> ${g.responsible || '—'}</div>
+                  ${g.members.map((m,mi) => `<div style="font-size:12px;color:var(--text-sec)">${mi+2}. ${m || '—'}</div>`).join('')}
+                </div>`).join('')}
+            </div>
+          </div>`;
+        } else {
+          sec.innerHTML += `<div class="review-row"><span class="review-q">${qText}</span><em style="color:var(--text-mut)">Sin completar</em></div>`;
+        }
+        return;
+      }
+
       const scoreDisplay = qType === 'scale'
         ? `${score} / 5`
         : (score || '<em style="color:var(--text-mut)">Sin respuesta</em>');
