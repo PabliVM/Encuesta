@@ -523,10 +523,26 @@ function countRequired() {
   return count;
 }
 
+// ── Toast de aviso ───────────────────────────────────────
+function showToast(msg) {
+  let toast = document.getElementById('surveyToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'surveyToast';
+    toast.className = 'survey-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.classList.add('visible');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toast.classList.remove('visible'), 3500);
+}
+
 // ── Validación ────────────────────────────────────────────
 window.showReview = function() {
   let hasError  = false;
   let firstElem = null;
+  const missing = [];
 
   (surveyData.aspects || []).forEach((a, aIdx) => {
     if (!a.active) return;
@@ -540,6 +556,7 @@ window.showReview = function() {
         : !ansVal;
       if (isMissing) {
         hasError = true;
+        missing.push(qn.text || `Pregunta ${qIdx+1} de ${a.title}`);
         const group = document.querySelector(`.rating-group[data-aspect="${aIdx}"][data-question="${qIdx}"]`)
           || document.querySelector(`.options-group[data-key="${aIdx}_${qIdx}"]`)
           || document.getElementById(`gw_${aIdx}_${qIdx}`);
@@ -554,6 +571,8 @@ window.showReview = function() {
   });
 
   if (hasError) {
+    const plural = missing.length === 1 ? 'campo obligatorio' : 'campos obligatorios';
+    showToast(`⚠ Faltan ${missing.length} ${plural} por rellenar: ${missing.slice(0,2).join(', ')}${missing.length > 2 ? '…' : ''}`);
     if (firstElem) firstElem.closest('.card')?.scrollIntoView({ behavior:'smooth', block:'center' });
     return;
   }
