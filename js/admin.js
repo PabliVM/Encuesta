@@ -163,6 +163,7 @@ window.openNewSurvey = function() {
   [1,2,3,4,5].forEach(n => { if ($('scaleLabel'+n)) $('scaleLabel'+n).value = DEFAULT_SCALE[n-1]; });
   $('modalSurveyTitle').textContent = 'Nueva encuesta';
   renderAspectsEditor();
+  updateScaleVisibility();
   show('modalSurvey');
 };
 
@@ -179,6 +180,7 @@ window.editSurvey = function(id) {
   [1,2,3,4,5].forEach(n => { if ($('scaleLabel'+n)) $('scaleLabel'+n).value = (s.scaleLabels||DEFAULT_SCALE)[n-1]; });
   $('modalSurveyTitle').textContent = 'Editar encuesta';
   renderAspectsEditor();
+  updateScaleVisibility();
   show('modalSurvey');
 };
 
@@ -316,6 +318,14 @@ function renderAspectsEditor() {
   }).join('');
 }
 
+function updateScaleVisibility() {
+  const hasScale = aspectsData.some(a =>
+    (a.questions||[]).some(q => (typeof q === 'string' ? 'scale' : q.type||'scale') === 'scale')
+  );
+  const scaleSection = document.querySelector('.scale-section');
+  if (scaleSection) scaleSection.style.display = hasScale ? '' : 'none';
+}
+
 window.changeQuestionType = function(aIdx, qIdx, type) {
   syncAspectsFromDOM();
   aspectsData[aIdx].questions[qIdx].type = type;
@@ -323,6 +333,7 @@ window.changeQuestionType = function(aIdx, qIdx, type) {
     aspectsData[aIdx].questions[qIdx].options = ['',''];
   }
   renderAspectsEditor();
+  updateScaleVisibility();
 };
 
 window.addOption = function(aIdx, qIdx) {
