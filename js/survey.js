@@ -89,7 +89,7 @@ function renderQuestionInput(qn, aIdx, qIdx) {
       return `<div class="text-answer-wrap" data-key="${key}">
         <textarea class="comment-input" data-text-answer="${key}"
           placeholder="Escribe tu respuesta…" rows="3"
-          oninput="window.answers['${key}']=this.value;updateTextPreview('${key}')"></textarea>
+          oninput="window.answers['${key}']=this.value.trim()||this.value;updateTextPreview('${key}')"></textarea>
         <div class="text-preview" id="preview_${key}" style="display:none"></div>
         <div class="highlight-toolbar" id="toolbar_${key}" style="display:none">
           <span class="highlight-toolbar-label">Selección:</span>
@@ -516,7 +516,8 @@ function countRequired() {
     if (!a.active) return;
     (a.questions || []).forEach(q => {
       const qn = typeof q === 'string' ? { type:'scale', required:true } : q;
-      if (qn.required !== false && qn.type !== 'text' && qn.type !== 'checkbox') count++;
+      // text es obligatorio si required===true explícitamente; checkbox siempre opcional
+      if (qn.required !== false && qn.type !== 'checkbox') count++;
     });
   });
   return count;
@@ -547,18 +548,44 @@ window.showReview = function() {
     if (!a.active) return;
     (a.questions || []).forEach((q, qIdx) => {
       const qn = typeof q === 'string' ? { type:'scale', required:true } : q;
-      const isRequired = qn.required !== false && qn.type !== 'text' && qn.type !== 'checkbox';
+      // checkbox siempre opcional; text y groups respetan el campo required
+      const isRequired = qn.required !== false && qn.type !== 'checkbox';
       if (!isRequired) return;
-      const ansVal   = window.answers[`${aIdx}_${qIdx}`];
-      const isMissing = qn.type === 'groups'
-        ? (!ansVal || !ansVal.groups)
-        : !ansVal;
+
+      const ansVal = window.answers[`${aIdx}_${qIdx}`];
+      let isMissing = false;
+      let missingDetail = '';
+
+      if (qn.type === 'groups') {
+        if (!ansVal || !ansVal.groups) {
+          isMissing = true;
+        } else {
+          // Validar que todos los nombres estén rellenos
+          const emptyNames = [];
+          ansVal.groups.forEach((g, gi) => {
+            if (!g.responsible?.trim()) emptyNames.push(`Grupo ${gi+1} Responsable`);
+            g.members.forEach((m, mi) => {
+              if (!m?.trim()) emptyNames.push(`Grupo ${gi+1} posición ${mi+2}`);
+            });
+          });
+          if (emptyNames.length) {
+            isMissing = true;
+            missingDetail = ` (faltan ${emptyNames.length} nombres)`;
+          }
+        }
+      } else if (qn.type === 'text') {
+        isMissing = !ansVal?.trim();
+      } else {
+        isMissing = !ansVal;
+      }
+
       if (isMissing) {
         hasError = true;
-        missing.push(qn.text || `Pregunta ${qIdx+1} de ${a.title}`);
+        missing.push((qn.text || `Pregunta ${qIdx+1} de ${a.title}`) + missingDetail);
         const group = document.querySelector(`.rating-group[data-aspect="${aIdx}"][data-question="${qIdx}"]`)
           || document.querySelector(`.options-group[data-key="${aIdx}_${qIdx}"]`)
-          || document.getElementById(`gw_${aIdx}_${qIdx}`);
+          || document.getElementById(`gw_${aIdx}_${qIdx}`)
+          || document.querySelector(`[data-text-answer="${aIdx}_${qIdx}"]`);
         if (group && !firstElem) firstElem = group;
         if (group) {
           group.style.outline = '2px solid var(--red)';
