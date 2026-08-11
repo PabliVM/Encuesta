@@ -217,6 +217,7 @@ const QUESTION_TYPES = [
   { value:'checkbox', label:'Opción múltiple' },
   { value:'yesno',    label:'Sí / No' },
   { value:'select',   label:'Desplegable' },
+  { value:'groups',   label:'Grupos de personas' },
 ];
 
 function normalizeQuestion(q) {
@@ -578,6 +579,17 @@ function renderResultsSummary(survey) {
                 <span class="bar-count">${count}</span>
               </div>`).join('')}`;
 
+        } else if (qType === 'groups') {
+          const groupsData = allResponses.map(r => r.answers?.[`${aIdx}_${qIdx}`]).filter(v => v && v.groups);
+          qBodyHtml = groupsData.length
+            ? `<div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${groupsData.length} respuesta(s)</div>
+               ${groupsData.map((data, i) => `
+                 <div style="font-size:12px;padding:6px 8px;background:var(--surface-alt);border-radius:var(--rs);margin-bottom:4px">
+                   <strong>${i+1}.</strong> ${data.distribution.join('+')} personas en ${data.groups.length} grupos ·
+                   ${data.groups.map((g,gi) => `Grupo ${gi+1}: ${[g.responsible, ...g.members].filter(Boolean).join(', ')||'—'}`).join(' / ')}
+                 </div>`).join('')}`
+            : `<div style="font-size:11px;color:var(--text-mut)">Sin respuestas</div>`;
+
         } else if (qType === 'checkbox') {
           const counts = {};
           allAnswers.forEach(v => {
@@ -663,6 +675,25 @@ window.openResponse = function(id) {
       const qType = typeof q === 'string' ? 'scale' : (q.type || 'scale');
       const score   = r.answers?.[`${aIdx}_${qIdx}`];
       const comment = r.questionComments?.[`${aIdx}_${qIdx}`] || '';
+
+      if (qType === 'groups') {
+        const data = score;
+        html += `<div class="detail-row" style="flex-direction:column;align-items:flex-start;gap:6px">
+          <span class="detail-q">${qText}</span>`;
+        if (data && data.groups) {
+          html += `<div style="width:100%">${data.groups.map((g,gi) => `
+            <div style="margin-bottom:6px;padding:8px;background:var(--surface-alt);border-radius:var(--rs)">
+              <div style="font-size:11px;font-weight:700;color:var(--rm-blue);margin-bottom:4px">Grupo ${gi+1} (${g.members.length+1} personas)</div>
+              <div style="font-size:12px;margin-bottom:2px">👑 <strong>Responsable:</strong> ${g.responsible||'—'}</div>
+              ${g.members.map((m,mi) => `<div style="font-size:12px;color:var(--text-sec);padding-left:18px">${mi+2}. ${m||'—'}</div>`).join('')}
+            </div>`).join('')}</div>`;
+        } else {
+          html += `<em style="color:var(--text-mut);font-size:12px">Sin completar</em>`;
+        }
+        html += `</div>`;
+        return;
+      }
+
       const scoreDisplay = score != null ? score : '—';
       let scoreLabel;
       if (qType === 'scale') {
