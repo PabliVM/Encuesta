@@ -2,26 +2,27 @@
 import { db, auth } from "./firebase-init.js";
 import {
   collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc,
-  query, where, orderBy, serverTimestamp
+  query, where, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import {
   signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 // ── Estado global ────────────────────────────────────────
-let currentUser  = null;
-let allSurveys   = [];
-let editingSurveyId = null;  // null = nueva encuesta
-let aspectsData  = [];       // aspectos del editor temporal
-let allResponses = [];
+let currentUser     = null;
+let allSurveys      = [];
+let editingSurveyId = null;
+let aspectsData     = [];
+let allResponses    = [];
+
+const DEFAULT_SCALE = ['Muy bajo','Bajo','Correcto','Bueno','Excelente'];
 
 // ── Helpers DOM ──────────────────────────────────────────
-const $  = id => document.getElementById(id);
+const $    = id => document.getElementById(id);
 const show = id => $(id).style.display = '';
 const hide = id => $(id).style.display = 'none';
 
 // ── AUTH ─────────────────────────────────────────────────
-// Mostrar spinner mientras Firebase restaura la sesión
 const authSpinner = document.createElement('div');
 authSpinner.id = 'authSpinner';
 authSpinner.className = 'view-center';
@@ -29,7 +30,6 @@ authSpinner.innerHTML = '<div class="spinner"></div><p class="loading-text">Comp
 document.querySelector('.main').prepend(authSpinner);
 hide('viewLogin');
 
-// Recordar última pestaña activa
 const LAST_TAB_KEY = 'admin_last_tab';
 
 onAuthStateChanged(auth, user => {
@@ -41,7 +41,6 @@ onAuthStateChanged(auth, user => {
     hide('viewLogin');
     show('viewDash');
     loadAllSurveys();
-    // Restaurar última pestaña — por defecto Encuestas
     const lastTab = localStorage.getItem(LAST_TAB_KEY) || 'tabEncuestas';
     showTab(lastTab);
   } else {
@@ -83,7 +82,6 @@ window.showTab = function(tabId) {
   $(tabId).classList.add('active');
   const idx = ['tabEncuestas','tabResultados'].indexOf(tabId);
   document.querySelectorAll('.tab-btn')[idx]?.classList.add('active');
-  // Recordar pestaña activa para restaurar al refrescar
   localStorage.setItem(LAST_TAB_KEY, tabId);
   if (tabId === 'tabResultados') loadResults();
 };
@@ -93,7 +91,6 @@ async function loadAllSurveys() {
   const snap = await getDocs(collection(db, 'survey'));
   allSurveys = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   renderSurveyList();
-  populateSurveySelects();
 }
 
 function renderSurveyList() {
@@ -120,13 +117,6 @@ function renderSurveyList() {
       </div>
     </div>
   `).join('');
-}
-
-function populateSurveySelects() {
-  const opts = allSurveys.map(s =>
-    `<option value="${s.id}">${s.title || s.id}</option>`
-  ).join('');
-  // filterResultSurvey ya no existe — resultados usa tarjetas
 }
 
 window.openPreview = function(surveyId) {
@@ -156,9 +146,7 @@ window.toggleSurveyActive = async function(id, current) {
 
 window.deleteSurvey = async function(id) {
   const survey = allSurveys.find(s => s.id === id);
-  if (!confirm(`¿Eliminar la encuesta "${survey?.title || id}"?
-
-Esta acción no se puede deshacer. Las respuestas asociadas no se eliminarán.`)) return;
+  if (!confirm(`¿Eliminar la encuesta "${survey?.title || id}"?\n\nEsta acción no se puede deshacer.`)) return;
   await deleteDoc(doc(db, 'survey', id));
   await loadAllSurveys();
 };
@@ -171,6 +159,8 @@ window.openNewSurvey = function() {
   $('surveyDesc').value   = '';
   $('surveySeason').value = '';
   $('surveyActive').value = 'true';
+  if ($('surveyShowScale')) $('surveyShowScale').checked = true;
+  [1,2,3,4,5].forEach(n => { if ($('scaleLabel'+n)) $('scaleLabel'+n).value = DEFAULT_SCALE[n-1]; });
   $('modalSurveyTitle').textContent = 'Nueva encuesta';
   renderAspectsEditor();
   show('modalSurvey');
@@ -185,6 +175,8 @@ window.editSurvey = function(id) {
   $('surveyDesc').value   = s.description || '';
   $('surveySeason').value = s.season || '';
   $('surveyActive').value = String(s.active !== false);
+  if ($('surveyShowScale')) $('surveyShowScale').checked = s.showScale !== false;
+  [1,2,3,4,5].forEach(n => { if ($('scaleLabel'+n)) $('scaleLabel'+n).value = (s.scaleLabels||DEFAULT_SCALE)[n-1]; });
   $('modalSurveyTitle').textContent = 'Editar encuesta';
   renderAspectsEditor();
   show('modalSurvey');
@@ -192,11 +184,14 @@ window.editSurvey = function(id) {
 
 window.saveSurvey = async function() {
   syncAspectsFromDOM();
+  const scaleLabels = [1,2,3,4,5].map(n => $('scaleLabel'+n)?.value?.trim() || DEFAULT_SCALE[n-1]);
   const data = {
     title:       $('surveyTitle').value.trim(),
     description: $('surveyDesc').value.trim(),
     season:      $('surveySeason').value.trim(),
     active:      $('surveyActive').value === 'true',
+    showScale:   $('surveyShowScale')?.checked !== false,
+    scaleLabels,
     aspects:     aspectsData,
     updatedAt:   serverTimestamp(),
   };
@@ -222,10 +217,9 @@ const QUESTION_TYPES = [
   { value:'select',   label:'Desplegable' },
 ];
 
-// Normaliza preguntas antiguas (string) al nuevo formato (objeto)
 function normalizeQuestion(q) {
-  if (typeof q === 'string') return { text: q, type: 'scale', options: [] };
-  return { text: q.text||'', type: q.type||'scale', options: q.options||[] };
+  if (typeof q === 'string') return { text: q, type: 'scale', options: [], required: true };
+  return { text: q.text||'', type: q.type||'scale', options: q.options||[], required: q.required !== false };
 }
 
 // ── Editor de aspectos ────────────────────────────────────
@@ -238,11 +232,10 @@ function syncAspectsFromDOM() {
     if (iconInput)  aspectsData[aIdx].icon  = iconInput.value;
     el.querySelectorAll('.question-editor-row').forEach((row, qIdx) => {
       if (!aspectsData[aIdx].questions[qIdx]) return;
-      const textInput = row.querySelector('.question-text-input');
+      const textInput  = row.querySelector('.question-text-input');
       const typeSelect = row.querySelector('.question-type-select');
       if (textInput)  aspectsData[aIdx].questions[qIdx].text = textInput.value;
       if (typeSelect) aspectsData[aIdx].questions[qIdx].type = typeSelect.value;
-      // Opciones (para radio/checkbox/select)
       const optInputs = row.querySelectorAll('.option-input');
       if (optInputs.length) {
         aspectsData[aIdx].questions[qIdx].options = Array.from(optInputs).map(i => i.value).filter(Boolean);
@@ -283,7 +276,7 @@ function renderAspectsEditor() {
           <button class="btn-order" onclick="moveAspect(${aIdx},1)" ${aIdx===total-1?'disabled':''}>↓</button>
         </div>
         <input class="form-input aspect-title-input" value="${(a.title||'').replace(/"/g,'&quot;')}"
-          placeholder="Nombre del aspecto (ej: Metodología)">
+          placeholder="Nombre del aspecto">
         <input class="form-input aspect-icon-input" style="width:60px" value="${a.icon || '📋'}"
           placeholder="Icono">
         <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-sec);white-space:nowrap;flex-shrink:0;cursor:pointer">
@@ -344,6 +337,7 @@ window.removeOption = function(aIdx, qIdx, oIdx) {
   aspectsData[aIdx].questions[qIdx].options.splice(oIdx, 1);
   renderAspectsEditor();
 };
+
 window.moveAspect = function(idx, dir) {
   syncAspectsFromDOM();
   const newIdx = idx + dir;
@@ -369,7 +363,7 @@ window.toggleTwoColumns = function(aIdx, val) {
 
 window.addAspect = function() {
   syncAspectsFromDOM();
-  aspectsData.push({ title:'', icon:'📋', active:true, questions:[{ text:'', type:'scale', options:[] }] });
+  aspectsData.push({ title:'', icon:'📋', active:true, questions:[{ text:'', type:'scale', options:[], required:true }] });
   renderAspectsEditor();
 };
 
@@ -398,90 +392,8 @@ window.toggleRequired = function(aIdx, qIdx, val) {
   aspectsData[aIdx].questions[qIdx].required = val;
 };
 
-
-// ── TOKENS ────────────────────────────────────────────────
-window.loadTokens = async function() {
-  const surveyFilter = $('filterSurvey').value;
-  const usedFilter   = $('filterUsed').value;
-
-  let q = collection(db, 'surveyTokens');
-  const snap = await getDocs(q);
-  let tokens = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-  if (surveyFilter) tokens = tokens.filter(t => t.surveyId === surveyFilter);
-  if (usedFilter !== '') tokens = tokens.filter(t => String(t.used) === usedFilter);
-
-  const el = $('tokenList');
-  if (!tokens.length) {
-    el.innerHTML = '<p style="color:var(--text-mut);font-size:13px">No hay tokens con estos filtros.</p>';
-    return;
-  }
-
-  el.innerHTML = tokens.map(t => {
-    const surveyName = allSurveys.find(s => s.id === t.surveyId)?.title || t.surveyId;
-    const link = `${location.origin}/index.html?token=${t.id}`;
-    return `
-      <div class="token-item">
-        <div class="token-id">${t.id}</div>
-        <div style="font-size:11px;color:var(--text-mut);flex:1">${surveyName}</div>
-        <span class="badge ${t.used ? 'badge-gray' : 'badge-green'}">${t.used ? 'Usado' : 'Pendiente'}</span>
-        <div class="token-actions">
-          <button class="btn-copy" onclick="copyTokenLink('${link}')">📋 Copiar</button>
-          ${!t.used ? `<button class="btn-danger" onclick="deactivateToken('${t.id}')">Desactivar</button>` : ''}
-        </div>
-      </div>
-    `;
-  }).join('');
-};
-
-window.copyTokenLink = function(link) {
-  navigator.clipboard.writeText(link).then(() => {
-    alert('Enlace copiado:\n' + link);
-  });
-};
-
-window.deactivateToken = async function(id) {
-  if (!confirm('¿Desactivar este token?')) return;
-  await updateDoc(doc(db, 'surveyTokens', id), { active: false });
-  loadTokens();
-};
-
-window.openGenTokens = function() {
-  $('tokenQty').value = '1';
-  show('modalTokens');
-};
-
-window.generateTokens = async function() {
-  const surveyId = $('tokenSurveyId').value;
-  const qty      = parseInt($('tokenQty').value) || 1;
-  if (!surveyId) { alert('Selecciona una encuesta.'); return; }
-
-  const generated = [];
-  for (let i = 0; i < qty; i++) {
-    const ref = await addDoc(collection(db, 'surveyTokens'), {
-      surveyId,
-      used:      false,
-      active:    true,
-      createdAt: serverTimestamp(),
-      usedAt:    null,
-      responseId: null,
-    });
-    generated.push(ref.id);
-  }
-
-  closeModal('modalTokens');
-  showTab('tabTokens');
-
-  const links = generated.map(id =>
-    `${location.origin}/index.html?token=${id}`
-  ).join('\n');
-  alert(`✅ ${qty} token(s) generado(s):\n\n${links}`);
-};
-
 // ── RESULTADOS ────────────────────────────────────────────
-// ── Resultados: lista de encuestas ───────────────────────
 window.loadResults = async function() {
-  // Cargar conteo de respuestas por encuesta
   const snap = await getDocs(collection(db, 'surveyResponses'));
   const allResp = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
@@ -519,7 +431,6 @@ window.loadResults = async function() {
   }).join('');
 };
 
-// ── Resultados: entrar al detalle de una encuesta ─────────
 window.openResultsSurvey = async function(surveyId) {
   const survey = allSurveys.find(s => s.id === surveyId);
   $('resultsDetailTitle').textContent = survey?.title || 'Resultados';
@@ -553,23 +464,15 @@ function renderResultsSummary(survey) {
   const total = allResponses.length;
   const globalAvgs = allResponses.map(r => r.globalAverage).filter(Boolean);
   const globalMean = globalAvgs.length
-    ? (globalAvgs.reduce((a,b) => a+b, 0) / globalAvgs.length).toFixed(2)
-    : '—';
+    ? (globalAvgs.reduce((a,b) => a+b, 0) / globalAvgs.length).toFixed(2) : '—';
 
   let html = `
     <div class="results-summary">
-      <div class="stat-card">
-        <div class="stat-value">${total}</div>
-        <div class="stat-label">Respuestas</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${globalMean}</div>
-        <div class="stat-label">Media global</div>
-      </div>
+      <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Respuestas</div></div>
+      <div class="stat-card"><div class="stat-value">${globalMean}</div><div class="stat-label">Media global</div></div>
     </div>
   `;
 
-  // Media por aspecto
   if (survey?.aspects) {
     survey.aspects.forEach((a, aIdx) => {
       if (!a.active) return;
@@ -586,7 +489,6 @@ function renderResultsSummary(survey) {
         const qType = typeof q === 'string' ? 'scale' : (q.type || 'scale');
         const allAnswers = allResponses.map(r => r.answers?.[`${aIdx}_${qIdx}`]).filter(v => v != null && v !== '');
 
-        // Comentarios por pregunta
         const qComments = allResponses.map(r => r.questionComments?.[`${aIdx}_${qIdx}`]).filter(Boolean);
         const commentsHtml = qComments.length ? `
           <div style="margin-top:6px;padding:6px 10px;background:var(--surface-alt);border-radius:var(--rs)">
@@ -597,30 +499,28 @@ function renderResultsSummary(survey) {
         let qBodyHtml = '';
 
         if (qType === 'scale') {
-          // Barras 1-5
           const scores = allAnswers.map(v => parseInt(v)).filter(v => !isNaN(v));
           const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
           const dist = [1,2,3,4,5].map(v => scores.filter(s=>s===v).length);
           const max  = Math.max(...dist, 1);
           const colors = ['#dc2626','#ea580c','#ca8a04','#16a34a','#2563eb'];
+          const labels = survey.scaleLabels || DEFAULT_SCALE;
           qBodyHtml = `
             <div style="font-size:11px;color:var(--text-mut);margin-bottom:4px">${scores.length} respuesta(s) · Media: <strong style="color:var(--rm-blue)">${avg}</strong></div>
             ${dist.map((count,i) => `
               <div class="bar-row">
-                <span class="bar-label">${i+1}</span>
+                <span class="bar-label" title="${labels[i]}">${i+1}</span>
                 <div class="bar-track"><div class="bar-fill" style="width:${(count/max*100).toFixed(0)}%;background:${colors[i]}"></div></div>
                 <span class="bar-count">${count}</span>
               </div>`).join('')}`;
 
         } else if (qType === 'text') {
-          // Lista de respuestas de texto
           qBodyHtml = allAnswers.length
             ? `<div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${allAnswers.length} respuesta(s)</div>
                ${allAnswers.map((v,i) => `<div style="font-size:12px;color:var(--text-sec);font-style:italic;padding:4px 8px;background:var(--surface-alt);border-radius:var(--rs);margin-bottom:4px">${i+1}. "${v}"</div>`).join('')}`
             : `<div style="font-size:11px;color:var(--text-mut)">Sin respuestas</div>`;
 
         } else if (qType === 'yesno') {
-          // Conteo Sí / No
           const si = allAnswers.filter(v => v === 'Sí').length;
           const no = allAnswers.filter(v => v === 'No').length;
           const tot = si + no || 1;
@@ -638,7 +538,6 @@ function renderResultsSummary(survey) {
             </div>`;
 
         } else if (qType === 'radio' || qType === 'select') {
-          // Conteo por opción
           const counts = {};
           allAnswers.forEach(v => { counts[v] = (counts[v]||0) + 1; });
           const max = Math.max(...Object.values(counts), 1);
@@ -652,7 +551,6 @@ function renderResultsSummary(survey) {
               </div>`).join('')}`;
 
         } else if (qType === 'checkbox') {
-          // Conteo por opción (múltiple)
           const counts = {};
           allAnswers.forEach(v => {
             String(v).split(', ').forEach(opt => { counts[opt] = (counts[opt]||0) + 1; });
@@ -691,9 +589,7 @@ function calcAspectAvg(aIdx, questions) {
       if (s) scores.push(s);
     });
   });
-  return scores.length
-    ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(2)
-    : '—';
+  return scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(2) : '—';
 }
 
 function renderResponsesList() {
@@ -702,13 +598,10 @@ function renderResponsesList() {
     el.innerHTML = '<p style="color:var(--text-mut);font-size:13px;margin-top:12px">No hay respuestas todavía.</p>';
     return;
   }
-
   el.innerHTML = `
     <h3 style="font-size:14px;font-weight:700;margin:16px 0 8px">Respuestas individuales (${allResponses.length})</h3>
     ${allResponses.map((r, idx) => {
-      const date = r.submittedAt?.toDate
-        ? r.submittedAt.toDate().toLocaleString('es-ES')
-        : '—';
+      const date = r.submittedAt?.toDate ? r.submittedAt.toDate().toLocaleString('es-ES') : '—';
       return `
         <div class="response-item">
           <div style="cursor:pointer;flex:1" onclick="openResponse('${r.id}')">
@@ -728,20 +621,16 @@ function renderResponsesList() {
 window.openResponse = function(id) {
   const r = allResponses.find(x => x.id === id);
   if (!r) return;
-
   const surveyId = allResponses[0]?.surveyId || '';
   const survey   = allSurveys.find(s => s.id === surveyId);
-  const date = r.submittedAt?.toDate
-    ? r.submittedAt.toDate().toLocaleString('es-ES') : '—';
+  const date = r.submittedAt?.toDate ? r.submittedAt.toDate().toLocaleString('es-ES') : '—';
 
   let html = `<p style="font-size:12px;color:var(--text-mut);margin-bottom:16px">Enviado: ${date}</p>`;
 
   (survey?.aspects || []).forEach((a, aIdx) => {
     if (!a.active) return;
-    html += `<div class="detail-section">
-      <div class="detail-section-title">${a.icon || ''} ${a.title}</div>`;
+    html += `<div class="detail-section"><div class="detail-section-title">${a.icon || ''} ${a.title}</div>`;
     (a.questions || []).forEach((q, qIdx) => {
-      // Normalizar — preguntas pueden ser string (antiguo) u objeto (nuevo)
       const qText = typeof q === 'string' ? q : (q.text || '—');
       const qType = typeof q === 'string' ? 'scale' : (q.type || 'scale');
       const score   = r.answers?.[`${aIdx}_${qIdx}`];
@@ -759,76 +648,51 @@ window.openResponse = function(id) {
     html += '</div>';
   });
 
-  // Bloques fijos
-  html += `<div class="detail-section">
-    <div class="detail-section-title">💼 Valoración Profesional</div>
-    <div class="detail-row"><span class="detail-q">Coordinador</span><span class="detail-score">${r.coordinatorProfessionalScore||'—'}/5</span></div>
-    <div class="detail-row"><span class="detail-q">Propia</span><span class="detail-score">${r.coachProfessionalScore||'—'}/5</span></div>
-    ${r.coordinatorComment ? `<div class="detail-comment">"${r.coordinatorComment}"</div>` : ''}
-  </div>
-  <div class="detail-section">
-    <div class="detail-section-title">👤 Valoración Personal</div>
-    <div class="detail-row"><span class="detail-q">Coordinador</span><span class="detail-score">${r.coordinatorPersonalScore||'—'}/5</span></div>
-    <div class="detail-row"><span class="detail-q">Propia</span><span class="detail-score">${r.coachPersonalScore||'—'}/5</span></div>
-    ${r.coachComment ? `<div class="detail-comment">"${r.coachComment}"</div>` : ''}
-  </div>
-  <div class="detail-section">
-    <div class="detail-section-title">⭐ Global</div>
-    <div class="detail-row"><span class="detail-q">Valoración global</span><span class="detail-score">${r.globalScore||'—'}/5</span></div>
-    ${r.finalComment ? `<div class="detail-comment">"${r.finalComment}"</div>` : ''}
-  </div>`;
-
   $('modalResponseBody').innerHTML = html;
   show('modalResponse');
 };
 
-// ── EXPORTAR CSV ──────────────────────────────────────────
 window.deleteResponse = async function(id, event) {
   event.stopPropagation();
   if (!confirm('¿Eliminar esta respuesta? Esta acción no se puede deshacer.')) return;
   await deleteDoc(doc(db, 'surveyResponses', id));
   allResponses = allResponses.filter(r => r.id !== id);
   renderResponsesList();
-  // Actualizar también la lista de tarjetas
   loadResults();
 };
 
 window.exportCSV = function() {
   if (!allResponses.length) { alert('No hay respuestas para exportar.'); return; }
-
   const surveyId = allResponses[0]?.surveyId || '';
   const survey   = allSurveys.find(s => s.id === surveyId);
 
-  const headers = ['token','fecha','media_global','val_prof_coordinador','val_prof_propia','val_pers_coordinador','val_pers_propia'];
+  const headers = ['fecha','media_global'];
   (survey?.aspects || []).forEach(a => {
-    (a.questions || []).forEach(q => headers.push(`${a.title}_${q}`.replace(/,/g,' ')));
+    (a.questions || []).forEach(q => {
+      const qText = typeof q === 'string' ? q : (q.text || '');
+      headers.push(`${a.title}_${qText}`.replace(/,/g,' '));
+    });
   });
 
   const rows = allResponses.map(r => {
-    const date = r.submittedAt?.toDate
-      ? r.submittedAt.toDate().toLocaleString('es-ES') : '';
-    const base = [
-      r.token, date, r.globalAverage||'',
-      r.coordinatorProfessionalScore||'', r.coachProfessionalScore||'',
-      r.coordinatorPersonalScore||'', r.coachPersonalScore||''
-    ];
+    const date = r.submittedAt?.toDate ? r.submittedAt.toDate().toLocaleString('es-ES') : '';
+    const base = [date, r.globalAverage||''];
     (survey?.aspects || []).forEach((a, aIdx) => {
       (a.questions || []).forEach((_, qIdx) => {
         base.push(r.answers?.[`${aIdx}_${qIdx}`] || '');
       });
     });
-    return base.join(',');
+    return base.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
   });
 
   const csv  = [headers.join(','), ...rows].join('\n');
-  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  const blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href = url; a.download = `respuestas_${surveyId}.csv`;
   a.click(); URL.revokeObjectURL(url);
 };
 
-// ── MODALES ───────────────────────────────────────────────
 window.closeModal = function(id) {
   hide(id);
 };
