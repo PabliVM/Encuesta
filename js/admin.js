@@ -406,8 +406,10 @@ window.loadResults = async function() {
   cards.innerHTML = allSurveys.map(s => {
     const responses = allResp.filter(r => r.surveyId === s.id);
     const count = responses.length;
-    const avgs  = responses.map(r => r.globalAverage).filter(Boolean);
-    const mean  = avgs.length ? (avgs.reduce((a,b)=>a+b,0)/avgs.length).toFixed(2) : '—';
+    // Media solo si hay preguntas de escala
+    const hasScale = (s.aspects||[]).some(a => (a.questions||[]).some(q => (typeof q === 'string' ? 'scale' : q.type) === 'scale'));
+    const avgs = responses.map(r => r.globalAverage).filter(v => v != null);
+    const mean = hasScale && avgs.length ? (avgs.reduce((a,b)=>a+b,0)/avgs.length).toFixed(2) : null;
 
     return `
       <div class="survey-item" style="cursor:pointer" onclick="openResultsSurvey('${s.id}')">
@@ -420,10 +422,11 @@ window.loadResults = async function() {
             <div style="font-size:22px;font-weight:800;color:var(--rm-blue)">${count}</div>
             <div style="font-size:10px;color:var(--text-mut);text-transform:uppercase;letter-spacing:.3px">Respuestas</div>
           </div>
+          ${mean !== null ? `
           <div style="text-align:center">
             <div style="font-size:22px;font-weight:800;color:var(--green)">${mean}</div>
             <div style="font-size:10px;color:var(--text-mut);text-transform:uppercase;letter-spacing:.3px">Media</div>
-          </div>
+          </div>` : ''}
           <span style="color:var(--text-mut);font-size:18px">›</span>
         </div>
       </div>
@@ -462,14 +465,17 @@ function renderResultsSummary(survey) {
   }
 
   const total = allResponses.length;
-  const globalAvgs = allResponses.map(r => r.globalAverage).filter(Boolean);
-  const globalMean = globalAvgs.length
-    ? (globalAvgs.reduce((a,b) => a+b, 0) / globalAvgs.length).toFixed(2) : '—';
+  const hasScale = (survey?.aspects||[]).some(a =>
+    (a.questions||[]).some(q => (typeof q === 'string' ? 'scale' : q.type) === 'scale')
+  );
+  const globalAvgs = allResponses.map(r => r.globalAverage).filter(v => v != null);
+  const globalMean = hasScale && globalAvgs.length
+    ? (globalAvgs.reduce((a,b) => a+b, 0) / globalAvgs.length).toFixed(2) : null;
 
   let html = `
     <div class="results-summary">
       <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Respuestas</div></div>
-      <div class="stat-card"><div class="stat-value">${globalMean}</div><div class="stat-label">Media global</div></div>
+      ${globalMean !== null ? `<div class="stat-card"><div class="stat-value">${globalMean}</div><div class="stat-label">Media global</div></div>` : ''}
     </div>
   `;
 
@@ -477,11 +483,13 @@ function renderResultsSummary(survey) {
     survey.aspects.forEach((a, aIdx) => {
       if (!a.active) return;
       const questions = a.questions || [];
+      const aspectHasScale = questions.some(q => (typeof q === 'string' ? 'scale' : q.type) === 'scale');
+      const aspectAvgVal = aspectHasScale ? calcAspectAvg(aIdx, questions) : null;
       let aspectHtml = `
         <div class="aspect-result">
           <div class="aspect-result-header">
             <span class="aspect-result-title">${a.icon || ''} ${a.title}</span>
-            <span class="aspect-result-avg">${calcAspectAvg(aIdx, questions)}</span>
+            ${aspectAvgVal !== null ? `<span class="aspect-result-avg">${aspectAvgVal}</span>` : ''}
           </div>
       `;
       questions.forEach((q, qIdx) => {
