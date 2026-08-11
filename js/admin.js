@@ -525,7 +525,16 @@ function renderResultsSummary(survey) {
         } else if (qType === 'text') {
           qBodyHtml = allAnswers.length
             ? `<div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${allAnswers.length} respuesta(s)</div>
-               ${allAnswers.map((v,i) => `<div style="font-size:12px;color:var(--text-sec);font-style:italic;padding:4px 8px;background:var(--surface-alt);border-radius:var(--rs);margin-bottom:4px">${i+1}. "${v}"</div>`).join('')}`
+               ${allResponses.map((r, i) => {
+                 const v  = r.answers?.[`${aIdx}_${qIdx}`];
+                 if (!v) return '';
+                 const hl = r.highlights?.[`${aIdx}_${qIdx}`];
+                 const escaped = hl ? hl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : null;
+                 const rendered = hl && v.includes(hl)
+                   ? v.replace(new RegExp(escaped, 'g'), `<mark style="background:#fef08a;border-radius:3px;padding:0 2px">${hl}</mark>`).replace(/\n/g,'<br>')
+                   : v.replace(/\n/g,'<br>');
+                 return `<div style="font-size:12px;color:var(--text-sec);padding:6px 8px;background:var(--surface-alt);border-radius:var(--rs);margin-bottom:4px;line-height:1.6">${i+1}. ${rendered}</div>`;
+               }).filter(Boolean).join('')}`
             : `<div style="font-size:11px;color:var(--text-mut)">Sin respuestas</div>`;
 
         } else if (qType === 'yesno') {
@@ -644,10 +653,21 @@ window.openResponse = function(id) {
       const score   = r.answers?.[`${aIdx}_${qIdx}`];
       const comment = r.questionComments?.[`${aIdx}_${qIdx}`] || '';
       const scoreDisplay = score != null ? score : '—';
-      const scoreLabel = qType === 'scale' ? `${scoreDisplay}/5` : (scoreDisplay || '—');
-      html += `<div class="detail-row">
+      let scoreLabel;
+      if (qType === 'scale') {
+        scoreLabel = `${scoreDisplay}/5`;
+      } else if (qType === 'text' && score) {
+        const hl = r.highlights?.[`${aIdx}_${qIdx}`];
+        const escaped = hl ? hl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : null;
+        scoreLabel = hl && score.includes(hl)
+          ? score.replace(new RegExp(escaped,'g'), `<mark style="background:#fef08a;border-radius:3px;padding:0 2px">${hl}</mark>`).replace(/\n/g,'<br>')
+          : score.replace(/\n/g,'<br>');
+      } else {
+        scoreLabel = scoreDisplay || '—';
+      }
+      html += `<div class="detail-row" style="flex-direction:column;align-items:flex-start;gap:4px">
         <span class="detail-q">${qText}</span>
-        <span class="detail-score score-${scoreDisplay}">${scoreLabel}</span>
+        <span class="detail-score" style="font-weight:400;font-size:12px;line-height:1.6">${scoreLabel}</span>
       </div>`;
       if (comment) html += `<div class="detail-comment">"${comment}"</div>`;
     });
