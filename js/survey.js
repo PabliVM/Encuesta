@@ -340,7 +340,10 @@ window.submitSurvey = async function() {
     const aspectAverages = {};
     (surveyData.aspects || []).forEach((a, aIdx) => {
       if (!a.active) return;
-      const scores = (a.questions || []).map((_, qIdx) => {
+      // Solo calcular media para preguntas de tipo escala
+      const scores = (a.questions || []).map((q, qIdx) => {
+        const qType = typeof q === 'string' ? 'scale' : (q.type || 'scale');
+        if (qType !== 'scale') return null;
         const v = window.answers[`${aIdx}_${qIdx}`];
         return typeof v === 'number' ? v : null;
       }).filter(v => v !== null);
@@ -348,6 +351,7 @@ window.submitSurvey = async function() {
     });
 
     const allAvgs = Object.values(aspectAverages);
+    // globalAverage solo si hay aspectos con escala
     const globalAverage = allAvgs.length ? +(allAvgs.reduce((s,v)=>s+v,0)/allAvgs.length).toFixed(2) : null;
 
     await addDoc(collection(db, 'surveyResponses'), {
