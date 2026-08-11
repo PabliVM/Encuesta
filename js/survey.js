@@ -47,11 +47,6 @@ function getCookie(name) {
   }
 
   const isPreview = params.get('preview') === '1';
-  const cookieKey = `survey_done_${surveyId}`;
-  if (!isPreview && getCookie(cookieKey)) {
-    showInvalid("Ya has completado esta encuesta en este dispositivo.");
-    return;
-  }
 
   try {
     const surveySnap = await getDoc(doc(db, "survey", surveyId));
@@ -62,6 +57,15 @@ function getCookie(name) {
     if (surveyData.active === false) {
       showInvalid("Esta encuesta no está disponible actualmente.");
       return;
+    }
+
+    // Comprobar cookie solo si limitOnePerDevice está activo
+    if (!isPreview && surveyData.limitOnePerDevice === true) {
+      const cookieKey = `survey_done_${surveyId}`;
+      if (getCookie(cookieKey)) {
+        showInvalid("Ya has completado esta encuesta en este dispositivo.");
+        return;
+      }
     }
 
     if (surveyData.scaleLabels?.length === 5) scaleLabels = surveyData.scaleLabels;
@@ -715,7 +719,9 @@ window.submitSurvey = async function() {
       globalAverage,
     });
 
-    setCookie(`survey_done_${surveyId}`, '1', 365);
+    if (surveyData.limitOnePerDevice === true) {
+      setCookie(`survey_done_${surveyId}`, '1', 365);
+    }
     showView('viewSent');
     hide('progressWrap');
 
