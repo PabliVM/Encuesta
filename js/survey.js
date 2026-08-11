@@ -8,8 +8,9 @@ let surveyData  = null;
 let surveyId    = null;
 let scaleLabels = ['Muy bajo','Bajo','Correcto','Bueno','Excelente'];
 
-// Exponer answers globalmente para oninput/onchange inline
-window.answers = {};
+// Exponer answers y highlights globalmente para oninput/onchange inline
+window.answers    = {};
+window.highlights = {};  // { "aIdx_qIdx": "texto marcado" }
 const answers = window.answers;
 
 const show = id => document.getElementById(id).style.display = '';
@@ -85,9 +86,23 @@ function renderQuestionInput(qn, aIdx, qIdx) {
         ${[1,2,3,4,5].map(n => `<button class="rating-btn" data-val="${n}" title="${n} · ${scaleLabels[n-1]}">${n}</button>`).join('')}
       </div>`;
     case 'text':
-      return `<textarea class="comment-input" data-text-answer="${key}"
-        placeholder="Escribe tu respuesta…" rows="3"
-        oninput="window.answers['${key}']=this.value"></textarea>`;
+      return `<div class="text-answer-wrap" data-key="${key}">
+        <textarea class="comment-input" data-text-answer="${key}"
+          placeholder="Escribe tu respuesta…" rows="3"
+          oninput="window.answers['${key}']=this.value;updateTextPreview('${key}')"></textarea>
+        <div class="text-preview" id="preview_${key}" style="display:none"></div>
+        <div class="highlight-toolbar" id="toolbar_${key}" style="display:none">
+          <span class="highlight-toolbar-label">Selección:</span>
+          <span class="highlight-selection-text" id="sel_${key}"></span>
+          <button class="btn-highlight" onclick="applyHighlight('${key}')">⭐ Marcar</button>
+          <button class="btn-highlight-remove" onclick="removeHighlight('${key}')">✕ Quitar</button>
+        </div>
+        <div class="highlight-current" id="marked_${key}" style="display:none">
+          <span style="font-size:11px;color:var(--text-mut)">Marcado: </span>
+          <span class="highlight-badge" id="markedbadge_${key}"></span>
+          <button class="btn-highlight-remove" onclick="removeHighlight('${key}')" style="margin-left:6px">✕</button>
+        </div>
+      </div>`;
     case 'yesno':
       return `<div class="rating-group yesno-group">
         <button class="rating-btn yesno-btn" data-key="${key}" data-val="Sí" onclick="selectYesNo(this,'${key}')">Sí</button>
@@ -201,6 +216,99 @@ function renderSurvey() {
   });
 
   attachRatingEvents();
+  attachTextSelectEvents();
+}
+
+// ── Highlight (texto libre) ──────────────────────────────
+window.updateTextPreview = function(key) {
+  const textarea = document.querySelector(`[data-text-answer="${key}"]`);
+  const preview  = document.getElementById(`preview_${key}`);
+  if (!textarea || !preview) return;
+  const text = textarea.value;
+  const hl   = window.highlights[key];
+  if (hl && text.includes(hl)) {
+    const escaped = hl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    preview.innerHTML = text.replace(
+      new RegExp(escaped, 'g'),
+      `<mark class="highlight-mark">${hl}</mark>`
+    ).replace(/\n/g, '<br>');
+    preview.style.display = 'block';
+    textarea.style.display = 'none';
+    updateMarkedBadge(key, hl);
+  } else {
+    preview.style.display = 'none';
+    textarea.style.display = '';
+    updateMarkedBadge(key, hl);
+  }
+};
+
+window.applyHighlight = function(key) {
+  const textarea = document.querySelector(`[data-text-answer="${key}"]`);
+  if (!textarea) return;
+  const sel = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd).trim();
+  if (!sel) { alert('Selecciona primero el texto que quieres marcar.'); return; }
+  window.highlights[key] = sel;
+  updateTextPreview(key);
+  document.getElementById(`toolbar_${key}`).style.display = 'none';
+};
+
+window.removeHighlight = function(key) {
+  delete window.highlights[key];
+  const preview  = document.getElementById(`preview_${key}`);
+  const textarea = document.querySelector(`[data-text-answer="${key}"]`);
+  if (preview)  preview.style.display = 'none';
+  if (textarea) textarea.style.display = '';
+  updateMarkedBadge(key, null);
+  document.getElementById(`toolbar_${key}`).style.display = 'none';
+};
+
+function updateMarkedBadge(key, hl) {
+  const marked  = document.getElementById(`marked_${key}`);
+  const badge   = document.getElementById(`markedbadge_${key}`);
+  if (!marked || !badge) return;
+  if (hl) {
+    badge.textContent = hl;
+    marked.style.display = 'flex';
+  } else {
+    marked.style.display = 'none';
+  }
+}
+
+// Mostrar toolbar al seleccionar texto en textarea
+function attachTextSelectEvents() {
+  document.querySelectorAll('.text-answer-wrap').forEach(wrap => {
+    const key      = wrap.dataset.key;
+    const textarea = wrap.querySelector('textarea');
+    const toolbar  = document.getElementById(`toolbar_${key}`);
+    if (!textarea || !toolbar) return;
+    textarea.addEventListener('mouseup', () => {
+      const sel = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd).trim();
+      if (sel) {
+        document.getElementById(`sel_${key}`).textContent = `"${sel}"`;
+        toolbar.style.display = 'flex';
+      } else {
+        toolbar.style.display = 'none';
+      }
+    });
+    textarea.addEventListener('keyup', () => {
+      const sel = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd).trim();
+      if (sel) {
+        document.getElementById(`sel_${key}`).textContent = `"${sel}"`;
+        toolbar.style.display = 'flex';
+      } else {
+        toolbar.style.display = 'none';
+      }
+    });
+    // Click en preview — volver a textarea para editar
+    const preview = document.getElementById(`preview_${key}`);
+    if (preview) {
+      preview.addEventListener('click', () => {
+        preview.style.display = 'none';
+        textarea.style.display = '';
+        textarea.focus();
+      });
+    }
+  });
 }
 
 function attachRatingEvents() {
@@ -358,6 +466,7 @@ window.submitSurvey = async function() {
       surveyId,
       submittedAt:    serverTimestamp(),
       answers:        window.answers,
+      highlights:     window.highlights,
       aspectComments,
       questionComments,
       aspectAverages,
