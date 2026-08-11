@@ -24,7 +24,7 @@
 
 <main class="main admin-main">
 
-  <!-- ── VISTA: LOGIN ── -->
+  <!-- LOGIN -->
   <div id="viewLogin" class="view-center">
     <div class="card login-card">
       <div class="login-logo">
@@ -46,17 +46,16 @@
     </div>
   </div>
 
-  <!-- ── VISTA: DASHBOARD ── -->
+  <!-- DASHBOARD -->
   <div id="viewDash" style="display:none">
 
-    <!-- TABS -->
     <div class="admin-tabs">
       <button class="tab-btn active" onclick="showTab('tabEncuestas')">📋 Encuestas</button>
       <button class="tab-btn" onclick="showTab('tabResultados')">📊 Resultados</button>
     </div>
 
     <!-- TAB: ENCUESTAS -->
-    <div id="tabEncuestas" class="tab-content">
+    <div id="tabEncuestas" class="tab-content active">
       <div class="tab-header">
         <h2 class="tab-title">Encuestas</h2>
         <button class="btn-primary" onclick="openNewSurvey()">+ Nueva encuesta</button>
@@ -66,14 +65,12 @@
 
     <!-- TAB: RESULTADOS -->
     <div id="tabResultados" class="tab-content" style="display:none">
-      <!-- Vista: lista de encuestas -->
       <div id="resultsSurveyList">
         <div class="tab-header">
           <h2 class="tab-title">Resultados</h2>
         </div>
         <div id="resultsSurveyCards"></div>
       </div>
-      <!-- Vista: detalle de una encuesta -->
       <div id="resultsDetail" style="display:none">
         <div class="tab-header">
           <button class="btn-secondary" onclick="backToResultsList()">← Volver</button>
@@ -115,6 +112,37 @@
           <option value="true">Activa</option>
           <option value="false">Inactiva</option>
         </select>
+      </div>
+
+      <!-- ESCALA DE VALORACIÓN -->
+      <div class="form-group">
+        <label class="form-label">Escala de valoración</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px">
+          <input type="checkbox" id="surveyShowScale" checked>
+          Mostrar leyenda de valoración en la encuesta
+        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;font-weight:800;color:#dc2626;width:16px">1</span>
+            <input class="form-input" id="scaleLabel1" value="Muy bajo" style="height:32px;font-size:12px" placeholder="Etiqueta 1">
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;font-weight:800;color:#ea580c;width:16px">2</span>
+            <input class="form-input" id="scaleLabel2" value="Bajo" style="height:32px;font-size:12px" placeholder="Etiqueta 2">
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;font-weight:800;color:#ca8a04;width:16px">3</span>
+            <input class="form-input" id="scaleLabel3" value="Correcto" style="height:32px;font-size:12px" placeholder="Etiqueta 3">
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;font-weight:800;color:#16a34a;width:16px">4</span>
+            <input class="form-input" id="scaleLabel4" value="Bueno" style="height:32px;font-size:12px" placeholder="Etiqueta 4">
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;font-weight:800;color:#2563eb;width:16px">5</span>
+            <input class="form-input" id="scaleLabel5" value="Excelente" style="height:32px;font-size:12px" placeholder="Etiqueta 5">
+          </div>
+        </div>
       </div>
 
       <!-- ASPECTOS -->
