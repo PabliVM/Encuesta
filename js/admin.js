@@ -128,6 +128,7 @@ window.duplicateSurvey = async function(id) {
     active:            false,
     showScale:         s.showScale !== false,
     limitOnePerDevice: s.limitOnePerDevice === true,
+    limitOneIP:        s.limitOneIP === true,
     scaleLegendLabel:  s.scaleLegendLabel || 'Escala de valoración:',
     scaleLabels:       s.scaleLabels || ['Muy bajo','Bajo','Correcto','Bueno','Excelente'],
     aspects:           JSON.parse(JSON.stringify(s.aspects || [])),
@@ -179,7 +180,7 @@ window.openNewSurvey = function() {
   $('surveySeason').value = '';
   $('surveyActive').value = 'true';
   if ($('surveyShowScale'))   $('surveyShowScale').checked   = true;
-  if ($('surveyLimitDevice')) $('surveyLimitDevice').checked = false;
+  if ($('surveyLimitIP')) $('surveyLimitIP').checked = false;
   if ($('surveyScaleLegend')) $('surveyScaleLegend').value = 'Escala de valoración:';
   [1,2,3,4,5].forEach(n => { if ($('scaleLabel'+n)) $('scaleLabel'+n).value = DEFAULT_SCALE[n-1]; });
   $('modalSurveyTitle').textContent = 'Nueva encuesta';
@@ -199,6 +200,7 @@ window.editSurvey = function(id) {
   $('surveyActive').value = String(s.active !== false);
   if ($('surveyShowScale'))   $('surveyShowScale').checked   = s.showScale !== false;
   if ($('surveyLimitDevice')) $('surveyLimitDevice').checked = s.limitOnePerDevice === true;
+  if ($('surveyLimitIP')) $('surveyLimitIP').checked = s.limitOneIP === true;
   if ($('surveyScaleLegend')) $('surveyScaleLegend').value = s.scaleLegendLabel || 'Escala de valoración:';
   [1,2,3,4,5].forEach(n => { if ($('scaleLabel'+n)) $('scaleLabel'+n).value = (s.scaleLabels||DEFAULT_SCALE)[n-1]; });
   $('modalSurveyTitle').textContent = 'Editar encuesta';
@@ -217,6 +219,7 @@ window.saveSurvey = async function() {
     active:            $('surveyActive').value === 'true',
     showScale:         $('surveyShowScale')?.checked !== false,
     limitOnePerDevice: $('surveyLimitDevice')?.checked === true,
+    limitOneIP:        $('surveyLimitIP')?.checked === true,
     scaleLegendLabel:  $('surveyScaleLegend')?.value?.trim() || 'Escala de valoración:',
     scaleLabels,
     aspects:           aspectsData,
