@@ -12,12 +12,6 @@ let scaleLabels = ['Muy bajo','Bajo','Correcto','Bueno','Excelente'];
 window.answers    = {};
 window.highlights = {};  // { "aIdx_qIdx": "texto marcado" }
 const answers = window.answers;
-function getResponsibleLabel(key) {
-  const [aIdx, qIdx] = key.split('_').map(Number);
-  const q = surveyData?.aspects?.[aIdx]?.questions?.[qIdx];
-  const qn = typeof q === 'string' ? {} : (q || {});
-  return qn.responsibleLabel || 'Responsable';
-}
 
 const show = id => document.getElementById(id).style.display = '';
 const hide = id => document.getElementById(id).style.display = 'none';
@@ -41,6 +35,7 @@ function getCookie(name) {
   const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
   return match ? match[2] : null;
 }
+
 // ── IP ────────────────────────────────────────────────────
 async function getPublicIP() {
   try {
@@ -52,6 +47,7 @@ async function getPublicIP() {
     return null;
   }
 }
+
 // ── INIT ──────────────────────────────────────────────────
 (async function init() {
   const params = new URLSearchParams(window.location.search);
@@ -75,7 +71,7 @@ async function getPublicIP() {
       return;
     }
 
-// Comprobar cookie solo si limitOnePerDevice está activo
+    // Comprobar cookie solo si limitOnePerDevice está activo
     if (!isPreview && surveyData.limitOnePerDevice === true) {
       const cookieKey = `survey_done_${surveyId}`;
       if (getCookie(cookieKey)) {
@@ -177,6 +173,13 @@ function renderQuestionInput(qn, aIdx, qIdx) {
 }
 
 // ── TIPO GRUPOS ───────────────────────────────────────────
+function getResponsibleLabel(key) {
+  const [aIdx, qIdx] = key.split('_').map(Number);
+  const q = surveyData?.aspects?.[aIdx]?.questions?.[qIdx];
+  const qn = typeof q === 'string' ? {} : (q || {});
+  return qn.responsibleLabel || 'Responsable';
+}
+
 function renderGroupsInput(key) {
   // Si ya hay datos guardados, restaurar directamente
   const saved = window.answers[key];
@@ -207,13 +210,14 @@ function renderGroupsInput(key) {
 }
 
 function renderGroupsFromData(key, data) {
+  const respLabel = getResponsibleLabel(key);
   const groupsHtml = data.groups.map((g, gi) => `
     <div class="group-card">
       <div class="group-header">Grupo ${gi + 1} <span style="font-size:11px;color:var(--text-mut)">(${g.members.length + 1} personas)</span></div>
       <div class="group-member group-responsible">
-        <span class="group-resp-badge">${getResponsibleLabel(key)}</span>
+        <span class="group-resp-badge">${respLabel}</span>
         <input class="form-input group-name-input" type="text"
-          placeholder="Nombre responsable"
+          placeholder="Nombre ${respLabel.toLowerCase()}"
           value="${(g.responsible||'').replace(/"/g,'&quot;')}"
           oninput="updateGroupMember('${key}',${gi},'responsible',this.value)">
       </div>
@@ -367,15 +371,22 @@ function renderSurvey() {
   document.querySelectorAll('.scale-pills .pill').forEach((pill, i) => {
     pill.textContent = `${i+1} · ${scaleLabels[i]}`;
   });
+
   const legendEl = document.querySelector('.scale-legend');
   if (legendEl) legendEl.textContent = surveyData.scaleLegendLabel || 'Escala de valoración:';
 
-  // Mostrar/ocultar leyenda
-  if (surveyData.showScale === false) {
-    const scaleWrap = document.querySelector('.scale-legend');
-    const pillsWrap = document.querySelector('.scale-pills');
+  // Mostrar leyenda SOLO si hay al menos una pregunta tipo escala activa Y showScale !== false
+  const hasScaleQuestion = (surveyData.aspects || []).some(a =>
+    a.active && (a.questions || []).some(q => (typeof q === 'string' ? 'scale' : (q.type || 'scale')) === 'scale')
+  );
+  const scaleWrap = document.querySelector('.scale-legend');
+  const pillsWrap = document.querySelector('.scale-pills');
+  if (surveyData.showScale === false || !hasScaleQuestion) {
     if (scaleWrap) scaleWrap.style.display = 'none';
     if (pillsWrap) pillsWrap.style.display = 'none';
+  } else {
+    if (scaleWrap) scaleWrap.style.display = '';
+    if (pillsWrap) pillsWrap.style.display = '';
   }
 
   const container = document.getElementById('aspectsContainer');
@@ -660,6 +671,7 @@ function buildReview() {
 
       if (qType === 'groups') {
         const data = score;
+        const respLabel = getResponsibleLabel(`${aIdx}_${qIdx}`);
         if (data && data.groups) {
           sec.innerHTML += `<div class="review-row" style="flex-direction:column;align-items:flex-start;gap:6px">
             <span class="review-q">${qText}</span>
@@ -667,7 +679,7 @@ function buildReview() {
               ${data.groups.map((g, gi) => `
                 <div style="margin-bottom:6px;padding:8px;background:var(--surface-alt);border-radius:var(--rs)">
                   <div style="font-size:11px;font-weight:700;color:var(--rm-blue);margin-bottom:4px">Grupo ${gi+1}</div>
-                  <div style="font-size:12px"><strong>Responsable:</strong> ${g.responsible || '—'}</div>
+                  <div style="font-size:12px"><strong>${respLabel}:</strong> ${g.responsible || '—'}</div>
                   ${g.members.map((m,mi) => `<div style="font-size:12px;color:var(--text-sec)">${mi+2}. ${m || '—'}</div>`).join('')}
                 </div>`).join('')}
             </div>
@@ -751,7 +763,7 @@ window.submitSurvey = async function() {
       globalAverage,
     });
 
-  if (surveyData.limitOnePerDevice === true) {
+    if (surveyData.limitOnePerDevice === true) {
       setCookie(`survey_done_${surveyId}`, '1', 365);
     }
     if (surveyData.limitOneIP === true && window._surveyIP) {
