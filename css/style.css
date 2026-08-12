@@ -172,7 +172,7 @@ body{
    ===================================================== */
 .question-row{ margin-bottom:16px; }
 .question-label{
-  display:block; font-size:13px; font-weight:600;
+  display:block; font-size:13px; font-weight:700;
   color:var(--text-sec); margin-bottom:10px; line-height:1.4;
   -webkit-user-select:none; user-select:none;
 }
@@ -201,7 +201,7 @@ body{
    ===================================================== */
 .comment-wrap{ margin-top:4px; }
 .comment-label{
-  display:block; font-size:12px; font-weight:600;
+  display:block; font-size:12px; font-weight:700;
   color:var(--text-mut); margin-bottom:6px;
   text-transform:uppercase; letter-spacing:.4px;
 }
