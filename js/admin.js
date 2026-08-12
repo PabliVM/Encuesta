@@ -180,7 +180,8 @@ window.openNewSurvey = function() {
   $('surveySeason').value = '';
   $('surveyActive').value = 'true';
   if ($('surveyShowScale'))   $('surveyShowScale').checked   = true;
-  if ($('surveyLimitIP')) $('surveyLimitIP').checked = false;
+  if ($('surveyLimitDevice')) $('surveyLimitDevice').checked = false;
+  if ($('surveyLimitIP'))     $('surveyLimitIP').checked     = false;
   if ($('surveyScaleLegend')) $('surveyScaleLegend').value = 'Escala de valoración:';
   [1,2,3,4,5].forEach(n => { if ($('scaleLabel'+n)) $('scaleLabel'+n).value = DEFAULT_SCALE[n-1]; });
   $('modalSurveyTitle').textContent = 'Nueva encuesta';
@@ -200,7 +201,7 @@ window.editSurvey = function(id) {
   $('surveyActive').value = String(s.active !== false);
   if ($('surveyShowScale'))   $('surveyShowScale').checked   = s.showScale !== false;
   if ($('surveyLimitDevice')) $('surveyLimitDevice').checked = s.limitOnePerDevice === true;
-  if ($('surveyLimitIP')) $('surveyLimitIP').checked = s.limitOneIP === true;
+  if ($('surveyLimitIP'))     $('surveyLimitIP').checked     = s.limitOneIP === true;
   if ($('surveyScaleLegend')) $('surveyScaleLegend').value = s.scaleLegendLabel || 'Escala de valoración:';
   [1,2,3,4,5].forEach(n => { if ($('scaleLabel'+n)) $('scaleLabel'+n).value = (s.scaleLabels||DEFAULT_SCALE)[n-1]; });
   $('modalSurveyTitle').textContent = 'Editar encuesta';
@@ -356,6 +357,8 @@ function updateScaleVisibility() {
   );
   const scaleSection = document.querySelector('.scale-section');
   if (scaleSection) scaleSection.style.display = hasScale ? '' : 'none';
+  const legendBlock = document.querySelector('.scale-legend-block');
+  if (legendBlock) legendBlock.style.display = hasScale ? '' : 'none';
 }
 
 window.changeQuestionType = function(aIdx, qIdx, type) {
