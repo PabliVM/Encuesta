@@ -1,7 +1,7 @@
 // js/survey.js — Encuesta pública · Cantera RM
 import { db } from "./firebase-init.js";
 import {
-  doc, getDoc, addDoc, collection, serverTimestamp
+  doc, getDoc, setDoc, addDoc, collection, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let surveyData  = null;
@@ -41,7 +41,17 @@ function getCookie(name) {
   const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
   return match ? match[2] : null;
 }
-
+// ── IP ────────────────────────────────────────────────────
+async function getPublicIP() {
+  try {
+    const res = await fetch('https://api.ipify.org?format=json');
+    const data = await res.json();
+    return data.ip || null;
+  } catch(e) {
+    console.error('No se pudo obtener IP', e);
+    return null;
+  }
+}
 // ── INIT ──────────────────────────────────────────────────
 (async function init() {
   const params = new URLSearchParams(window.location.search);
@@ -65,12 +75,26 @@ function getCookie(name) {
       return;
     }
 
-    // Comprobar cookie solo si limitOnePerDevice está activo
+// Comprobar cookie solo si limitOnePerDevice está activo
     if (!isPreview && surveyData.limitOnePerDevice === true) {
       const cookieKey = `survey_done_${surveyId}`;
       if (getCookie(cookieKey)) {
         showInvalid("Ya has completado esta encuesta en este dispositivo.");
         return;
+      }
+    }
+
+    // Comprobar IP solo si limitOneIP está activo
+    if (!isPreview && surveyData.limitOneIP === true) {
+      const ip = await getPublicIP();
+      if (ip) {
+        window._surveyIP = ip;
+        const ipDocId = `${surveyId}_${ip.replace(/[.:]/g,'-')}`;
+        const ipSnap = await getDoc(doc(db, "surveyIPs", ipDocId));
+        if (ipSnap.exists()) {
+          showInvalid("Ya se ha respondido esta encuesta desde esta conexión.");
+          return;
+        }
       }
     }
 
@@ -727,8 +751,14 @@ window.submitSurvey = async function() {
       globalAverage,
     });
 
-    if (surveyData.limitOnePerDevice === true) {
+  if (surveyData.limitOnePerDevice === true) {
       setCookie(`survey_done_${surveyId}`, '1', 365);
+    }
+    if (surveyData.limitOneIP === true && window._surveyIP) {
+      const ipDocId = `${surveyId}_${window._surveyIP.replace(/[.:]/g,'-')}`;
+      try {
+        await setDoc(doc(db, "surveyIPs", ipDocId), { surveyId, createdAt: serverTimestamp() });
+      } catch(e) { console.error('No se pudo registrar IP', e); }
     }
     showView('viewSent');
     hide('progressWrap');
