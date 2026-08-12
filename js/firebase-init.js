@@ -4,12 +4,12 @@ import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.0/firebas
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBCV9zfsSel5CGITv4pbekb21-Iy3WUoZw",
-  authDomain: "survey-fee49.firebaseapp.com",
-  projectId: "survey-fee49",
-  storageBucket: "survey-fee49.firebasestorage.app",
-  messagingSenderId: "298293631489",
-  appId: "1:298293631489:web:c1fd60c35872e7b17b3e00"
+  apiKey: "AIzaSyDs-KoBvWL10TkJfhc4aRAK8_Wd5tNOI44",
+  authDomain: "encuesta-f913f.firebaseapp.com",
+  projectId: "encuesta-f913f",
+  storageBucket: "encuesta-f913f.firebasestorage.app",
+  messagingSenderId: "1006380215931",
+  appId: "1:1006380215931:web:32025f2dba0b41efaa3cde"
 };
 
 const app = initializeApp(firebaseConfig);
