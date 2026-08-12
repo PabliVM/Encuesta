@@ -756,19 +756,20 @@ window.exportCSV = async function() {
   wsMain['!cols'] = regularHeaders.map((h,i) => ({wch: i===0?20:Math.min(Math.max(h.length,12),40)}));
   XLSX.utils.book_append_sheet(wb, wsMain, 'Respuestas');
 
-  // ── HOJA 2: Grupos (una fila por persona) ──────────────
+  // ── HOJA 2: Grupos (una fila por persona, sin repetir jugador/grupo) ──
   if (groupQuestions.length > 0) {
-    const groupHeaders = ['Fecha', 'Jugador (pregunta texto libre)', 'Pregunta grupos', 'Grupo', 'Persona', 'Recoge entradas'];
+    const groupHeaders = ['FECHA', 'JUGADOR', 'GRUPO', 'PERSONA', 'RECOGE'];
     const groupRows = [];
 
     allResponses.forEach(r => {
       const date = r.submittedAt?.toDate ? r.submittedAt.toDate().toLocaleString('es-ES') : '';
+      let isFirstResponse = true;
 
-      groupQuestions.forEach(({aIdx, qIdx, qText, aTitle}) => {
+      groupQuestions.forEach(({aIdx, qIdx}) => {
         const data = r.answers?.[`${aIdx}_${qIdx}`];
         if (!data || !data.groups) return;
 
-        // Buscar el nombre del jugador en preguntas de texto del mismo aspecto
+        // Buscar nombre del jugador en preguntas de texto libre
         let jugador = '';
         (survey?.aspects||[]).forEach((a, aI) => {
           (a.questions||[]).forEach((q, qI) => {
@@ -781,24 +782,28 @@ window.exportCSV = async function() {
         });
 
         data.groups.forEach((g, gi) => {
-          // Responsable
+          const grupoLabel = `Grupo ${gi + 1}`;
+          let isFirstInGroup = true;
+
+          // Responsable — siempre primera fila del grupo
           groupRows.push([
-            date,
-            jugador,
-            qText,
-            `Grupo ${gi + 1}`,
+            isFirstResponse && gi === 0 ? date : '',
+            isFirstResponse && gi === 0 ? jugador : '',
+            isFirstInGroup ? grupoLabel : '',
             g.responsible || '—',
             'Sí'
           ]);
-          // Miembros
+          isFirstInGroup = false;
+          isFirstResponse = false;
+
+          // Miembros — sin repetir fecha, jugador ni grupo
           g.members.forEach(m => {
             groupRows.push([
-              date,
-              jugador,
-              qText,
-              `Grupo ${gi + 1}`,
+              '',
+              '',
+              '',
               m || '—',
-              'No'
+              ''
             ]);
           });
         });
@@ -806,7 +811,9 @@ window.exportCSV = async function() {
     });
 
     const wsGroups = XLSX.utils.aoa_to_sheet([groupHeaders, ...groupRows]);
-    wsGroups['!cols'] = groupHeaders.map(h => ({wch: Math.min(Math.max(h.length, 14), 40)}));
+    wsGroups['!cols'] = [
+      {wch:20}, {wch:24}, {wch:10}, {wch:24}, {wch:8}
+    ];
     XLSX.utils.book_append_sheet(wb, wsGroups, 'Grupos');
   }
 
