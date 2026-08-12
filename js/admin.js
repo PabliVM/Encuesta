@@ -8,7 +8,6 @@ import {
   signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-// ── Estado global ────────────────────────────────────────
 let currentUser     = null;
 let allSurveys      = [];
 let editingSurveyId = null;
@@ -17,7 +16,6 @@ let allResponses    = [];
 
 const DEFAULT_SCALE = ['Muy bajo','Bajo','Correcto','Bueno','Excelente'];
 
-// ── Helpers DOM ──────────────────────────────────────────
 const $    = id => document.getElementById(id);
 const show = id => $(id).style.display = '';
 const hide = id => $(id).style.display = 'none';
@@ -159,7 +157,8 @@ window.openNewSurvey = function() {
   $('surveyDesc').value   = '';
   $('surveySeason').value = '';
   $('surveyActive').value = 'true';
-  if ($('surveyShowScale')) $('surveyShowScale').checked = true;
+  if ($('surveyShowScale'))   $('surveyShowScale').checked   = true;
+  if ($('surveyLimitDevice')) $('surveyLimitDevice').checked = false;
   [1,2,3,4,5].forEach(n => { if ($('scaleLabel'+n)) $('scaleLabel'+n).value = DEFAULT_SCALE[n-1]; });
   $('modalSurveyTitle').textContent = 'Nueva encuesta';
   renderAspectsEditor();
@@ -176,7 +175,8 @@ window.editSurvey = function(id) {
   $('surveyDesc').value   = s.description || '';
   $('surveySeason').value = s.season || '';
   $('surveyActive').value = String(s.active !== false);
-  if ($('surveyShowScale')) $('surveyShowScale').checked = s.showScale !== false;
+  if ($('surveyShowScale'))   $('surveyShowScale').checked   = s.showScale !== false;
+  if ($('surveyLimitDevice')) $('surveyLimitDevice').checked = s.limitOnePerDevice === true;
   [1,2,3,4,5].forEach(n => { if ($('scaleLabel'+n)) $('scaleLabel'+n).value = (s.scaleLabels||DEFAULT_SCALE)[n-1]; });
   $('modalSurveyTitle').textContent = 'Editar encuesta';
   renderAspectsEditor();
@@ -188,14 +188,15 @@ window.saveSurvey = async function() {
   syncAspectsFromDOM();
   const scaleLabels = [1,2,3,4,5].map(n => $('scaleLabel'+n)?.value?.trim() || DEFAULT_SCALE[n-1]);
   const data = {
-    title:       $('surveyTitle').value.trim(),
-    description: $('surveyDesc').value.trim(),
-    season:      $('surveySeason').value.trim(),
-    active:      $('surveyActive').value === 'true',
-    showScale:   $('surveyShowScale')?.checked !== false,
+    title:             $('surveyTitle').value.trim(),
+    description:       $('surveyDesc').value.trim(),
+    season:            $('surveySeason').value.trim(),
+    active:            $('surveyActive').value === 'true',
+    showScale:         $('surveyShowScale')?.checked !== false,
+    limitOnePerDevice: $('surveyLimitDevice')?.checked === true,
     scaleLabels,
-    aspects:     aspectsData,
-    updatedAt:   serverTimestamp(),
+    aspects:           aspectsData,
+    updatedAt:         serverTimestamp(),
   };
   if (!data.title) { alert('El título es obligatorio.'); return; }
 
@@ -209,7 +210,7 @@ window.saveSurvey = async function() {
   await loadAllSurveys();
 };
 
-// ── Tipos de pregunta disponibles ────────────────────────
+// ── Tipos de pregunta ────────────────────────────────────
 const QUESTION_TYPES = [
   { value:'scale',    label:'Escala 1-5' },
   { value:'text',     label:'Texto libre' },
@@ -408,21 +409,17 @@ window.toggleRequired = function(aIdx, qIdx, val) {
 window.loadResults = async function() {
   const snap = await getDocs(collection(db, 'surveyResponses'));
   const allResp = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
   const cards = $('resultsSurveyCards');
   if (!allSurveys.length) {
     cards.innerHTML = '<p style="color:var(--text-mut);font-size:13px">No hay encuestas.</p>';
     return;
   }
-
   cards.innerHTML = allSurveys.map(s => {
     const responses = allResp.filter(r => r.surveyId === s.id);
     const count = responses.length;
-    // Media solo si hay preguntas de escala
     const hasScale = (s.aspects||[]).some(a => (a.questions||[]).some(q => (typeof q === 'string' ? 'scale' : q.type) === 'scale'));
     const avgs = responses.map(r => r.globalAverage).filter(v => v != null);
     const mean = hasScale && avgs.length ? (avgs.reduce((a,b)=>a+b,0)/avgs.length).toFixed(2) : null;
-
     return `
       <div class="survey-item" style="cursor:pointer" onclick="openResultsSurvey('${s.id}')">
         <div class="survey-item-info">
@@ -434,30 +431,23 @@ window.loadResults = async function() {
             <div style="font-size:22px;font-weight:800;color:var(--rm-blue)">${count}</div>
             <div style="font-size:10px;color:var(--text-mut);text-transform:uppercase;letter-spacing:.3px">Respuestas</div>
           </div>
-          ${mean !== null ? `
-          <div style="text-align:center">
+          ${mean !== null ? `<div style="text-align:center">
             <div style="font-size:22px;font-weight:800;color:var(--green)">${mean}</div>
             <div style="font-size:10px;color:var(--text-mut);text-transform:uppercase;letter-spacing:.3px">Media</div>
           </div>` : ''}
           <span style="color:var(--text-mut);font-size:18px">›</span>
         </div>
-      </div>
-    `;
+      </div>`;
   }).join('');
 };
 
 window.openResultsSurvey = async function(surveyId) {
   const survey = allSurveys.find(s => s.id === surveyId);
   $('resultsDetailTitle').textContent = survey?.title || 'Resultados';
-
-  const snap = await getDocs(
-    query(collection(db, 'surveyResponses'), where('surveyId', '==', surveyId))
-  );
+  const snap = await getDocs(query(collection(db, 'surveyResponses'), where('surveyId', '==', surveyId)));
   allResponses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
   hide('resultsSurveyList');
   show('resultsDetail');
-
   renderResultsSummary(survey);
   renderResponsesList();
 };
@@ -475,21 +465,15 @@ function renderResultsSummary(survey) {
     $('resultsSummary').innerHTML = '<p style="color:var(--text-mut);font-size:13px">No hay respuestas todavía.</p>';
     return;
   }
-
   const total = allResponses.length;
-  const hasScale = (survey?.aspects||[]).some(a =>
-    (a.questions||[]).some(q => (typeof q === 'string' ? 'scale' : q.type) === 'scale')
-  );
+  const hasScale = (survey?.aspects||[]).some(a => (a.questions||[]).some(q => (typeof q === 'string' ? 'scale' : q.type) === 'scale'));
   const globalAvgs = allResponses.map(r => r.globalAverage).filter(v => v != null);
-  const globalMean = hasScale && globalAvgs.length
-    ? (globalAvgs.reduce((a,b) => a+b, 0) / globalAvgs.length).toFixed(2) : null;
+  const globalMean = hasScale && globalAvgs.length ? (globalAvgs.reduce((a,b)=>a+b,0)/globalAvgs.length).toFixed(2) : null;
 
-  let html = `
-    <div class="results-summary">
-      <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Respuestas</div></div>
-      ${globalMean !== null ? `<div class="stat-card"><div class="stat-value">${globalMean}</div><div class="stat-label">Media global</div></div>` : ''}
-    </div>
-  `;
+  let html = `<div class="results-summary">
+    <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Respuestas</div></div>
+    ${globalMean !== null ? `<div class="stat-card"><div class="stat-value">${globalMean}</div><div class="stat-label">Media global</div></div>` : ''}
+  </div>`;
 
   if (survey?.aspects) {
     survey.aspects.forEach((a, aIdx) => {
@@ -497,27 +481,23 @@ function renderResultsSummary(survey) {
       const questions = a.questions || [];
       const aspectHasScale = questions.some(q => (typeof q === 'string' ? 'scale' : q.type) === 'scale');
       const aspectAvgVal = aspectHasScale ? calcAspectAvg(aIdx, questions) : null;
-      let aspectHtml = `
-        <div class="aspect-result">
-          <div class="aspect-result-header">
-            <span class="aspect-result-title">${a.icon || ''} ${a.title}</span>
-            ${aspectAvgVal !== null ? `<span class="aspect-result-avg">${aspectAvgVal}</span>` : ''}
-          </div>
-      `;
+      let aspectHtml = `<div class="aspect-result">
+        <div class="aspect-result-header">
+          <span class="aspect-result-title">${a.icon || ''} ${a.title}</span>
+          ${aspectAvgVal !== null ? `<span class="aspect-result-avg">${aspectAvgVal}</span>` : ''}
+        </div>`;
+
       questions.forEach((q, qIdx) => {
         const qText = typeof q === 'string' ? q : (q.text || '—');
         const qType = typeof q === 'string' ? 'scale' : (q.type || 'scale');
         const allAnswers = allResponses.map(r => r.answers?.[`${aIdx}_${qIdx}`]).filter(v => v != null && v !== '');
-
         const qComments = allResponses.map(r => r.questionComments?.[`${aIdx}_${qIdx}`]).filter(Boolean);
-        const commentsHtml = qComments.length ? `
-          <div style="margin-top:6px;padding:6px 10px;background:var(--surface-alt);border-radius:var(--rs)">
-            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--text-mut);margin-bottom:4px">Comentarios (${qComments.length})</div>
-            ${qComments.map((c,i) => `<div style="font-size:12px;color:var(--text-sec);font-style:italic;padding:2px 0;border-bottom:1px solid var(--border-light)">${i+1}. "${c}"</div>`).join('')}
-          </div>` : '';
+        const commentsHtml = qComments.length ? `<div style="margin-top:6px;padding:6px 10px;background:var(--surface-alt);border-radius:var(--rs)">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--text-mut);margin-bottom:4px">Comentarios (${qComments.length})</div>
+          ${qComments.map((c,i) => `<div style="font-size:12px;color:var(--text-sec);font-style:italic;padding:2px 0;border-bottom:1px solid var(--border-light)">${i+1}. "${c}"</div>`).join('')}
+        </div>` : '';
 
         let qBodyHtml = '';
-
         if (qType === 'scale') {
           const scores = allAnswers.map(v => parseInt(v)).filter(v => !isNaN(v));
           const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
@@ -525,106 +505,80 @@ function renderResultsSummary(survey) {
           const max  = Math.max(...dist, 1);
           const colors = ['#dc2626','#ea580c','#ca8a04','#16a34a','#2563eb'];
           const labels = survey.scaleLabels || DEFAULT_SCALE;
-          qBodyHtml = `
-            <div style="font-size:11px;color:var(--text-mut);margin-bottom:4px">${scores.length} respuesta(s) · Media: <strong style="color:var(--rm-blue)">${avg}</strong></div>
-            ${dist.map((count,i) => `
-              <div class="bar-row">
-                <span class="bar-label" title="${labels[i]}">${i+1}</span>
-                <div class="bar-track"><div class="bar-fill" style="width:${(count/max*100).toFixed(0)}%;background:${colors[i]}"></div></div>
-                <span class="bar-count">${count}</span>
-              </div>`).join('')}`;
-
+          qBodyHtml = `<div style="font-size:11px;color:var(--text-mut);margin-bottom:4px">${scores.length} respuesta(s) · Media: <strong style="color:var(--rm-blue)">${avg}</strong></div>
+            ${dist.map((count,i) => `<div class="bar-row">
+              <span class="bar-label" title="${labels[i]}">${i+1}</span>
+              <div class="bar-track"><div class="bar-fill" style="width:${(count/max*100).toFixed(0)}%;background:${colors[i]}"></div></div>
+              <span class="bar-count">${count}</span>
+            </div>`).join('')}`;
         } else if (qType === 'text') {
           qBodyHtml = allAnswers.length
             ? `<div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${allAnswers.length} respuesta(s)</div>
-               ${allResponses.map((r, i) => {
-                 const v  = r.answers?.[`${aIdx}_${qIdx}`];
+               ${allResponses.map((r,i) => {
+                 const v = r.answers?.[`${aIdx}_${qIdx}`];
                  if (!v) return '';
                  const hl = r.highlights?.[`${aIdx}_${qIdx}`];
-                 const escaped = hl ? hl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : null;
+                 const escaped = hl ? hl.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') : null;
                  const rendered = hl && v.includes(hl)
-                   ? v.replace(new RegExp(escaped, 'g'), `<mark style="background:#fef08a;border-radius:3px;padding:0 2px">${hl}</mark>`).replace(/\n/g,'<br>')
+                   ? v.replace(new RegExp(escaped,'g'),`<mark style="background:#fef08a;border-radius:3px;padding:0 2px">${hl}</mark>`).replace(/\n/g,'<br>')
                    : v.replace(/\n/g,'<br>');
                  return `<div style="font-size:12px;color:var(--text-sec);padding:6px 8px;background:var(--surface-alt);border-radius:var(--rs);margin-bottom:4px;line-height:1.6">${i+1}. ${rendered}</div>`;
                }).filter(Boolean).join('')}`
             : `<div style="font-size:11px;color:var(--text-mut)">Sin respuestas</div>`;
-
         } else if (qType === 'yesno') {
-          const si = allAnswers.filter(v => v === 'Sí').length;
-          const no = allAnswers.filter(v => v === 'No').length;
-          const tot = si + no || 1;
-          qBodyHtml = `
-            <div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${allAnswers.length} respuesta(s)</div>
-            <div class="bar-row">
-              <span class="bar-label" style="width:24px">Sí</span>
-              <div class="bar-track"><div class="bar-fill" style="width:${(si/tot*100).toFixed(0)}%;background:#16a34a"></div></div>
-              <span class="bar-count">${si}</span>
-            </div>
-            <div class="bar-row">
-              <span class="bar-label" style="width:24px">No</span>
-              <div class="bar-track"><div class="bar-fill" style="width:${(no/tot*100).toFixed(0)}%;background:#dc2626"></div></div>
-              <span class="bar-count">${no}</span>
-            </div>`;
-
+          const si = allAnswers.filter(v=>v==='Sí').length;
+          const no = allAnswers.filter(v=>v==='No').length;
+          const tot = si+no||1;
+          qBodyHtml = `<div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${allAnswers.length} respuesta(s)</div>
+            <div class="bar-row"><span class="bar-label" style="width:24px">Sí</span><div class="bar-track"><div class="bar-fill" style="width:${(si/tot*100).toFixed(0)}%;background:#16a34a"></div></div><span class="bar-count">${si}</span></div>
+            <div class="bar-row"><span class="bar-label" style="width:24px">No</span><div class="bar-track"><div class="bar-fill" style="width:${(no/tot*100).toFixed(0)}%;background:#dc2626"></div></div><span class="bar-count">${no}</span></div>`;
         } else if (qType === 'radio' || qType === 'select') {
           const counts = {};
-          allAnswers.forEach(v => { counts[v] = (counts[v]||0) + 1; });
-          const max = Math.max(...Object.values(counts), 1);
-          qBodyHtml = `
-            <div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${allAnswers.length} respuesta(s)</div>
-            ${Object.entries(counts).map(([opt,count]) => `
-              <div class="bar-row">
-                <span style="font-size:11px;color:var(--text-sec);min-width:80px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${opt}</span>
-                <div class="bar-track"><div class="bar-fill" style="width:${(count/max*100).toFixed(0)}%;background:var(--rm-blue)"></div></div>
-                <span class="bar-count">${count}</span>
-              </div>`).join('')}`;
-
-        } else if (qType === 'groups') {
-          const groupsData = allResponses.map(r => r.answers?.[`${aIdx}_${qIdx}`]).filter(v => v && v.groups);
-          qBodyHtml = groupsData.length
-            ? `<div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${groupsData.length} respuesta(s)</div>
-               ${groupsData.map((data, i) => `
-                 <div style="font-size:12px;padding:6px 8px;background:var(--surface-alt);border-radius:var(--rs);margin-bottom:4px">
-                   <strong>${i+1}.</strong> ${data.distribution.join('+')} personas en ${data.groups.length} grupos ·
-                   ${data.groups.map((g,gi) => `Grupo ${gi+1}: ${[g.responsible, ...g.members].filter(Boolean).join(', ')||'—'}`).join(' / ')}
-                 </div>`).join('')}`
-            : `<div style="font-size:11px;color:var(--text-mut)">Sin respuestas</div>`;
-
+          allAnswers.forEach(v => { counts[v]=(counts[v]||0)+1; });
+          const max = Math.max(...Object.values(counts),1);
+          qBodyHtml = `<div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${allAnswers.length} respuesta(s)</div>
+            ${Object.entries(counts).map(([opt,count]) => `<div class="bar-row">
+              <span style="font-size:11px;color:var(--text-sec);min-width:80px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${opt}</span>
+              <div class="bar-track"><div class="bar-fill" style="width:${(count/max*100).toFixed(0)}%;background:var(--rm-blue)"></div></div>
+              <span class="bar-count">${count}</span>
+            </div>`).join('')}`;
         } else if (qType === 'checkbox') {
           const counts = {};
-          allAnswers.forEach(v => {
-            String(v).split(', ').forEach(opt => { counts[opt] = (counts[opt]||0) + 1; });
-          });
-          const max = Math.max(...Object.values(counts), 1);
-          qBodyHtml = `
-            <div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${allAnswers.length} respuesta(s) (selección múltiple)</div>
-            ${Object.entries(counts).map(([opt,count]) => `
-              <div class="bar-row">
-                <span style="font-size:11px;color:var(--text-sec);min-width:80px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${opt}</span>
-                <div class="bar-track"><div class="bar-fill" style="width:${(count/max*100).toFixed(0)}%;background:var(--rm-blue)"></div></div>
-                <span class="bar-count">${count}</span>
-              </div>`).join('')}`;
+          allAnswers.forEach(v => { String(v).split(', ').forEach(opt => { counts[opt]=(counts[opt]||0)+1; }); });
+          const max = Math.max(...Object.values(counts),1);
+          qBodyHtml = `<div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${allAnswers.length} respuesta(s) (selección múltiple)</div>
+            ${Object.entries(counts).map(([opt,count]) => `<div class="bar-row">
+              <span style="font-size:11px;color:var(--text-sec);min-width:80px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${opt}</span>
+              <div class="bar-track"><div class="bar-fill" style="width:${(count/max*100).toFixed(0)}%;background:var(--rm-blue)"></div></div>
+              <span class="bar-count">${count}</span>
+            </div>`).join('')}`;
+        } else if (qType === 'groups') {
+          const groupsData = allResponses.map(r=>r.answers?.[`${aIdx}_${qIdx}`]).filter(v=>v&&v.groups);
+          qBodyHtml = groupsData.length
+            ? `<div style="font-size:11px;color:var(--text-mut);margin-bottom:6px">${groupsData.length} respuesta(s)</div>
+               ${groupsData.map((data,i) => `<div style="font-size:12px;padding:6px 8px;background:var(--surface-alt);border-radius:var(--rs);margin-bottom:4px">
+                 <strong>${i+1}.</strong> ${data.distribution.join('+')} personas en ${data.groups.length} grupos ·
+                 ${data.groups.map((g,gi)=>`Grupo ${gi+1}: ${[g.responsible,...g.members].filter(Boolean).join(', ')||'—'}`).join(' / ')}
+               </div>`).join('')}`
+            : `<div style="font-size:11px;color:var(--text-mut)">Sin respuestas</div>`;
         }
 
-        aspectHtml += `
-          <div style="margin-bottom:14px">
-            <div style="font-size:12px;color:var(--text-sec);margin-bottom:6px;font-weight:600">${qText}</div>
-            ${qBodyHtml}
-            ${commentsHtml}
-          </div>`;
+        aspectHtml += `<div style="margin-bottom:14px">
+          <div style="font-size:12px;color:var(--text-sec);margin-bottom:6px;font-weight:600">${qText}</div>
+          ${qBodyHtml}${commentsHtml}
+        </div>`;
       });
       aspectHtml += '</div>';
       html += aspectHtml;
     });
   }
-
   $('resultsSummary').innerHTML = html;
 }
 
 function calcAspectAvg(aIdx, questions) {
   const scores = [];
   allResponses.forEach(r => {
-    questions.forEach((_, qIdx) => {
+    questions.forEach((_,qIdx) => {
       const s = r.answers?.[`${aIdx}_${qIdx}`];
       if (s) scores.push(s);
     });
@@ -638,24 +592,20 @@ function renderResponsesList() {
     el.innerHTML = '<p style="color:var(--text-mut);font-size:13px;margin-top:12px">No hay respuestas todavía.</p>';
     return;
   }
-  el.innerHTML = `
-    <h3 style="font-size:14px;font-weight:700;margin:16px 0 8px">Respuestas individuales (${allResponses.length})</h3>
-    ${allResponses.map((r, idx) => {
+  el.innerHTML = `<h3 style="font-size:14px;font-weight:700;margin:16px 0 8px">Respuestas individuales (${allResponses.length})</h3>
+    ${allResponses.map((r,idx) => {
       const date = r.submittedAt?.toDate ? r.submittedAt.toDate().toLocaleString('es-ES') : '—';
-      return `
-        <div class="response-item">
-          <div style="cursor:pointer;flex:1" onclick="openResponse('${r.id}')">
-            <div style="font-size:13px;font-weight:700">Respuesta ${idx + 1}</div>
-            <div class="response-date">${date}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
-            <div class="response-avg">${r.globalAverage || '—'}</div>
-            <button class="btn-danger" onclick="deleteResponse('${r.id}', event)" style="height:30px;padding:0 10px">🗑</button>
-          </div>
+      return `<div class="response-item">
+        <div style="cursor:pointer;flex:1" onclick="openResponse('${r.id}')">
+          <div style="font-size:13px;font-weight:700">Respuesta ${idx+1}</div>
+          <div class="response-date">${date}</div>
         </div>
-      `;
-    }).join('')}
-  `;
+        <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+          <div class="response-avg">${r.globalAverage||'—'}</div>
+          <button class="btn-danger" onclick="deleteResponse('${r.id}',event)" style="height:30px;padding:0 10px">🗑</button>
+        </div>
+      </div>`;
+    }).join('')}`;
 }
 
 window.openResponse = function(id) {
@@ -664,28 +614,25 @@ window.openResponse = function(id) {
   const surveyId = allResponses[0]?.surveyId || '';
   const survey   = allSurveys.find(s => s.id === surveyId);
   const date = r.submittedAt?.toDate ? r.submittedAt.toDate().toLocaleString('es-ES') : '—';
-
   let html = `<p style="font-size:12px;color:var(--text-mut);margin-bottom:16px">Enviado: ${date}</p>`;
 
-  (survey?.aspects || []).forEach((a, aIdx) => {
+  (survey?.aspects||[]).forEach((a,aIdx) => {
     if (!a.active) return;
-    html += `<div class="detail-section"><div class="detail-section-title">${a.icon || ''} ${a.title}</div>`;
-    (a.questions || []).forEach((q, qIdx) => {
-      const qText = typeof q === 'string' ? q : (q.text || '—');
-      const qType = typeof q === 'string' ? 'scale' : (q.type || 'scale');
-      const score   = r.answers?.[`${aIdx}_${qIdx}`];
-      const comment = r.questionComments?.[`${aIdx}_${qIdx}`] || '';
+    html += `<div class="detail-section"><div class="detail-section-title">${a.icon||''} ${a.title}</div>`;
+    (a.questions||[]).forEach((q,qIdx) => {
+      const qText = typeof q==='string' ? q : (q.text||'—');
+      const qType = typeof q==='string' ? 'scale' : (q.type||'scale');
+      const score = r.answers?.[`${aIdx}_${qIdx}`];
+      const comment = r.questionComments?.[`${aIdx}_${qIdx}`]||'';
 
-      if (qType === 'groups') {
-        const data = score;
-        html += `<div class="detail-row" style="flex-direction:column;align-items:flex-start;gap:6px">
-          <span class="detail-q">${qText}</span>`;
-        if (data && data.groups) {
-          html += `<div style="width:100%">${data.groups.map((g,gi) => `
+      if (qType==='groups') {
+        html += `<div class="detail-row" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="detail-q">${qText}</span>`;
+        if (score&&score.groups) {
+          html += `<div style="width:100%">${score.groups.map((g,gi)=>`
             <div style="margin-bottom:6px;padding:8px;background:var(--surface-alt);border-radius:var(--rs)">
               <div style="font-size:11px;font-weight:700;color:var(--rm-blue);margin-bottom:4px">Grupo ${gi+1} (${g.members.length+1} personas)</div>
               <div style="font-size:12px;margin-bottom:2px">👑 <strong>Responsable:</strong> ${g.responsible||'—'}</div>
-              ${g.members.map((m,mi) => `<div style="font-size:12px;color:var(--text-sec);padding-left:18px">${mi+2}. ${m||'—'}</div>`).join('')}
+              ${g.members.map((m,mi)=>`<div style="font-size:12px;color:var(--text-sec);padding-left:18px">${mi+2}. ${m||'—'}</div>`).join('')}
             </div>`).join('')}</div>`;
         } else {
           html += `<em style="color:var(--text-mut);font-size:12px">Sin completar</em>`;
@@ -694,18 +641,18 @@ window.openResponse = function(id) {
         return;
       }
 
-      const scoreDisplay = score != null ? score : '—';
+      const scoreDisplay = score!=null ? score : '—';
       let scoreLabel;
-      if (qType === 'scale') {
+      if (qType==='scale') {
         scoreLabel = `${scoreDisplay}/5`;
-      } else if (qType === 'text' && score) {
+      } else if (qType==='text'&&score) {
         const hl = r.highlights?.[`${aIdx}_${qIdx}`];
-        const escaped = hl ? hl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : null;
-        scoreLabel = hl && score.includes(hl)
-          ? score.replace(new RegExp(escaped,'g'), `<mark style="background:#fef08a;border-radius:3px;padding:0 2px">${hl}</mark>`).replace(/\n/g,'<br>')
+        const escaped = hl ? hl.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') : null;
+        scoreLabel = hl&&score.includes(hl)
+          ? score.replace(new RegExp(escaped,'g'),`<mark style="background:#fef08a;border-radius:3px;padding:0 2px">${hl}</mark>`).replace(/\n/g,'<br>')
           : score.replace(/\n/g,'<br>');
       } else {
-        scoreLabel = scoreDisplay || '—';
+        scoreLabel = scoreDisplay||'—';
       }
       html += `<div class="detail-row" style="flex-direction:column;align-items:flex-start;gap:4px">
         <span class="detail-q">${qText}</span>
@@ -725,42 +672,72 @@ window.openResponse = function(id) {
 window.deleteResponse = async function(id, event) {
   event.stopPropagation();
   if (!confirm('¿Eliminar esta respuesta? Esta acción no se puede deshacer.')) return;
-  await deleteDoc(doc(db, 'surveyResponses', id));
-  allResponses = allResponses.filter(r => r.id !== id);
+  await deleteDoc(doc(db,'surveyResponses',id));
+  allResponses = allResponses.filter(r=>r.id!==id);
   renderResponsesList();
   loadResults();
 };
 
-window.exportCSV = function() {
+// ── EXPORTAR EXCEL ────────────────────────────────────────
+window.exportCSV = async function() {
   if (!allResponses.length) { alert('No hay respuestas para exportar.'); return; }
-  const surveyId = allResponses[0]?.surveyId || '';
-  const survey   = allSurveys.find(s => s.id === surveyId);
+  const surveyId = allResponses[0]?.surveyId||'';
+  const survey   = allSurveys.find(s=>s.id===surveyId);
 
-  const headers = ['fecha','media_global'];
-  (survey?.aspects || []).forEach(a => {
-    (a.questions || []).forEach(q => {
-      const qText = typeof q === 'string' ? q : (q.text || '');
-      headers.push(`${a.title}_${qText}`.replace(/,/g,' '));
+  if (!window.XLSX) {
+    await new Promise((res,rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload=res; s.onerror=rej;
+      document.head.appendChild(s);
     });
+  }
+  const XLSX = window.XLSX;
+
+  const headers = ['Fecha','Media global'];
+  const colMeta = [];
+
+  (survey?.aspects||[]).forEach((a,aIdx) => {
+    (a.questions||[]).forEach((q,qIdx) => {
+      const qText = typeof q==='string' ? q : (q.text||`Q${qIdx+1}`);
+      const qType = typeof q==='string' ? 'scale' : (q.type||'scale');
+      headers.push(`${a.title} — ${qText}`);
+      colMeta.push({aIdx,qIdx,qType});
+      if (qType==='scale') {
+        headers.push(`${a.title} — ${qText} (comentario)`);
+        colMeta.push({aIdx,qIdx,qType:'scale_comment'});
+      }
+    });
+    headers.push(`${a.title} — Comentario general`);
+    colMeta.push({aIdx,qIdx:-1,qType:'aspect_comment'});
   });
 
   const rows = allResponses.map(r => {
     const date = r.submittedAt?.toDate ? r.submittedAt.toDate().toLocaleString('es-ES') : '';
-    const base = [date, r.globalAverage||''];
-    (survey?.aspects || []).forEach((a, aIdx) => {
-      (a.questions || []).forEach((_, qIdx) => {
-        base.push(r.answers?.[`${aIdx}_${qIdx}`] || '');
-      });
+    const row = [date, r.globalAverage!=null?r.globalAverage:''];
+    colMeta.forEach(({aIdx,qIdx,qType}) => {
+      if (qType==='aspect_comment') {
+        row.push(r.aspectComments?.[aIdx]||'');
+      } else if (qType==='scale_comment') {
+        row.push(r.questionComments?.[`${aIdx}_${qIdx}`]||'');
+      } else if (qType==='groups') {
+        const data = r.answers?.[`${aIdx}_${qIdx}`];
+        if (data&&data.groups) {
+          row.push(data.groups.map((g,gi)=>`Grupo ${gi+1}: ${[g.responsible,...g.members].filter(Boolean).join(', ')}`).join(' | '));
+        } else { row.push(''); }
+      } else {
+        const val = r.answers?.[`${aIdx}_${qIdx}`];
+        row.push(val!=null?val:'');
+      }
     });
-    return base.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
+    return row;
   });
 
-  const csv  = [headers.join(','), ...rows].join('\n');
-  const blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = `respuestas_${surveyId}.csv`;
-  a.click(); URL.revokeObjectURL(url);
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers,...rows]);
+  ws['!cols'] = headers.map((h,i) => ({wch: i===0?20:Math.min(Math.max(h.length,12),40)}));
+  XLSX.utils.book_append_sheet(wb, ws, 'Respuestas');
+  XLSX.writeFile(wb, `${survey?.title||'encuesta'}_respuestas.xlsx`);
 };
 
 window.closeModal = function(id) {
