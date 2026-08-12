@@ -183,7 +183,7 @@ function renderGroupsFromData(key, data) {
       <div class="group-member group-responsible">
         <span class="group-resp-badge">Quien recoge las entradas</span>
         <input class="form-input group-name-input" type="text"
-          placeholder="Nombre quien recoge las entradas"
+          placeholder="Nombre"
           value="${(g.responsible||'').replace(/"/g,'&quot;')}"
           oninput="updateGroupMember('${key}',${gi},'responsible',this.value)">
       </div>
