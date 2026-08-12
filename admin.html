@@ -116,9 +116,13 @@
 
       <div class="form-group">
         <label class="form-label">Control de acceso</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px">
-          <input type="checkbox" id="surveyShowScale" checked>
-          Mostrar leyenda de valoración en la encuesta
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="surveyLimitDevice">
+          Limitar a una respuesta por dispositivo (cookie)
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:6px">
+          <input type="checkbox" id="surveyLimitIP">
+          Limitar a una respuesta por IP (más fuerte, sobrevive incógnito)
         </label>
         <input class="form-input" id="surveyScaleLegend" placeholder="Texto de la leyenda" value="Escala de valoración:" style="margin-bottom:12px">
         <p style="font-size:11px;color:var(--text-mut);margin-top:4px">
