@@ -179,6 +179,7 @@ window.openNewSurvey = function() {
   $('surveyActive').value = 'true';
   if ($('surveyShowScale'))   $('surveyShowScale').checked   = true;
   if ($('surveyLimitDevice')) $('surveyLimitDevice').checked = false;
+  if ($('surveyScaleLegend')) $('surveyScaleLegend').value = 'Escala de valoración:';
   [1,2,3,4,5].forEach(n => { if ($('scaleLabel'+n)) $('scaleLabel'+n).value = DEFAULT_SCALE[n-1]; });
   $('modalSurveyTitle').textContent = 'Nueva encuesta';
   renderAspectsEditor();
@@ -197,6 +198,7 @@ window.editSurvey = function(id) {
   $('surveyActive').value = String(s.active !== false);
   if ($('surveyShowScale'))   $('surveyShowScale').checked   = s.showScale !== false;
   if ($('surveyLimitDevice')) $('surveyLimitDevice').checked = s.limitOnePerDevice === true;
+  if ($('surveyScaleLegend')) $('surveyScaleLegend').value = s.scaleLegendLabel || 'Escala de valoración:';
   [1,2,3,4,5].forEach(n => { if ($('scaleLabel'+n)) $('scaleLabel'+n).value = (s.scaleLabels||DEFAULT_SCALE)[n-1]; });
   $('modalSurveyTitle').textContent = 'Editar encuesta';
   renderAspectsEditor();
@@ -214,6 +216,7 @@ window.saveSurvey = async function() {
     active:            $('surveyActive').value === 'true',
     showScale:         $('surveyShowScale')?.checked !== false,
     limitOnePerDevice: $('surveyLimitDevice')?.checked === true,
+    scaleLegendLabel:  $('surveyScaleLegend')?.value?.trim() || 'Escala de valoración:',
     scaleLabels,
     aspects:           aspectsData,
     updatedAt:         serverTimestamp(),
@@ -264,11 +267,14 @@ function syncAspectsFromDOM() {
       if (optInputs.length) {
         aspectsData[aIdx].questions[qIdx].options = Array.from(optInputs).map(i => i.value).filter(Boolean);
       }
+      const respInput = row.querySelector('.responsible-label-input');
+      if (respInput) aspectsData[aIdx].questions[qIdx].responsibleLabel = respInput.value;
     });
   });
 }
 
-function renderOptionsEditor(aIdx, qIdx, options) {
+${renderOptionsEditor(aIdx, qIdx, qn.options)}
+            ${qn.type==='groups' ? `<input class="form-input responsible-label-input" style="margin-top:6px;height:32px;font-size:12px" value="${(qn.responsibleLabel||'Responsable').replace(/"/g,'&quot;')}" placeholder="Etiqueta responsable (ej: Quién recoge)">` : ''}
   const hasOptions = ['radio','checkbox','select'].includes(aspectsData[aIdx]?.questions[qIdx]?.type);
   if (!hasOptions) return '';
   const opts = (options||[]).length ? options : [''];
