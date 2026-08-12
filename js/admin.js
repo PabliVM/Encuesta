@@ -697,7 +697,8 @@ window.exportCSV = async function() {
   // Detectar si hay preguntas de tipo groups para decidir estructura
   const groupQuestions = [];
   const regularColMeta = [];
-  const regularHeaders = ['Fecha', 'Media global'];
+  // Sin "Media global" — solo Fecha
+  const regularHeaders = ['FECHA'];
 
   (survey?.aspects||[]).forEach((a,aIdx) => {
     (a.questions||[]).forEach((q,qIdx) => {
@@ -705,30 +706,44 @@ window.exportCSV = async function() {
       const qType = typeof q==='string' ? 'scale' : (q.type||'scale');
       if (qType === 'groups') {
         groupQuestions.push({aIdx, qIdx, qText, aTitle: a.title});
+        // Insertar columna Nº DE ENTRADAS después de la pregunta de texto anterior
+        regularHeaders.push('Nº DE ENTRADAS');
+        regularColMeta.push({aIdx, qIdx, qType:'groups_total'});
       } else {
-        regularHeaders.push(`${a.title} — ${qText}`);
+        // Cabecera: solo el texto de la pregunta en mayúsculas, sin prefijo del aspecto
+        regularHeaders.push(qText.toUpperCase());
         regularColMeta.push({aIdx, qIdx, qType});
         if (qType==='scale') {
-          regularHeaders.push(`${a.title} — ${qText} (comentario)`);
+          regularHeaders.push(`${qText.toUpperCase()} (COMENTARIO)`);
           regularColMeta.push({aIdx, qIdx, qType:'scale_comment'});
         }
       }
     });
-    regularHeaders.push(`${a.title} — Comentario general`);
+    // Comentario general del aspecto en mayúsculas
+    regularHeaders.push('COMENTARIO GENERAL');
     regularColMeta.push({aIdx, qIdx:-1, qType:'aspect_comment'});
   });
 
   const wb = XLSX.utils.book_new();
 
-  // ── HOJA 1: Respuestas generales (sin grupos) ──────────
+  // ── HOJA 1: Respuestas generales (sin grupos, sin media global) ──
   const mainRows = allResponses.map(r => {
     const date = r.submittedAt?.toDate ? r.submittedAt.toDate().toLocaleString('es-ES') : '';
-    const row = [date, r.globalAverage!=null?r.globalAverage:''];
+    const row = [date];
     regularColMeta.forEach(({aIdx,qIdx,qType}) => {
       if (qType==='aspect_comment') {
         row.push(r.aspectComments?.[aIdx]||'');
       } else if (qType==='scale_comment') {
         row.push(r.questionComments?.[`${aIdx}_${qIdx}`]||'');
+      } else if (qType==='groups_total') {
+        // Nº de entradas = suma de personas en todos los grupos
+        const data = r.answers?.[`${aIdx}_${qIdx}`];
+        if (data && data.groups) {
+          const total = data.groups.reduce((sum,g) => sum + 1 + g.members.length, 0);
+          row.push(total);
+        } else {
+          row.push('');
+        }
       } else {
         const val = r.answers?.[`${aIdx}_${qIdx}`];
         row.push(val!=null?val:'');
