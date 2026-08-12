@@ -181,9 +181,9 @@ function renderGroupsFromData(key, data) {
     <div class="group-card">
       <div class="group-header">Grupo ${gi + 1} <span style="font-size:11px;color:var(--text-mut)">(${g.members.length + 1} personas)</span></div>
       <div class="group-member group-responsible">
-        <span class="group-resp-badge">Quien recoge las entradas</span>
+        <span class="group-resp-badge">Responsable</span>
         <input class="form-input group-name-input" type="text"
-          placeholder="Nombre"
+          placeholder="Nombre responsable"
           value="${(g.responsible||'').replace(/"/g,'&quot;')}"
           oninput="updateGroupMember('${key}',${gi},'responsible',this.value)">
       </div>
