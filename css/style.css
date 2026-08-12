@@ -204,6 +204,7 @@ body{
   display:block; font-size:13px; font-weight:700;
   color:var(--text-sec); margin-bottom:10px; line-height:1.4;
   -webkit-user-select:none; user-select:none;
+  text-transform:uppercase;
 }
 .optional{ font-weight:400; font-style:italic; text-transform:none; letter-spacing:0; }
 .comment-input{
