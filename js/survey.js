@@ -217,7 +217,7 @@ function renderGroupsFromData(key, data) {
       <div class="group-member group-responsible">
         <span class="group-resp-badge">${respLabel}</span>
         <input class="form-input group-name-input" type="text"
-          placeholder="Nombre ${respLabel.toLowerCase()}"
+          placeholder="Nombre y apellidos"
           value="${(g.responsible||'').replace(/"/g,'&quot;')}"
           oninput="updateGroupMember('${key}',${gi},'responsible',this.value)">
       </div>
@@ -225,7 +225,7 @@ function renderGroupsFromData(key, data) {
         <div class="group-member">
           <span class="group-member-num">${mi + 2}</span>
           <input class="form-input group-name-input" type="text"
-            placeholder="Nombre ${mi + 2}"
+            placeholder="Nombre y apellidos ${mi + 2}"
             value="${(m||'').replace(/"/g,'&quot;')}"
             oninput="updateGroupMember('${key}',${gi},'member',this.value,${mi})">
         </div>`).join('')}
