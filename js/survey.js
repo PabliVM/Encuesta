@@ -364,7 +364,7 @@ window.updateCheckbox = function(key, input) {
 function renderSurvey() {
   document.getElementById('headerTitle').textContent  = surveyData.title || 'Encuesta de Valoración';
   document.getElementById('headerSeason').textContent = surveyData.season || 'Cantera';
-  document.getElementById('surveyTitle').textContent  = surveyData.title || '';
+  document.getElementById('surveyTitle').style.display = 'none';
   document.getElementById('surveyDesc').textContent   = surveyData.description || '';
 
   // Actualizar pills con etiquetas personalizadas
