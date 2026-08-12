@@ -128,6 +128,7 @@ window.duplicateSurvey = async function(id) {
     active:            false,
     showScale:         s.showScale !== false,
     limitOnePerDevice: s.limitOnePerDevice === true,
+    scaleLegendLabel:  s.scaleLegendLabel || 'Escala de valoración:',
     scaleLabels:       s.scaleLabels || ['Muy bajo','Bajo','Correcto','Bueno','Excelente'],
     aspects:           JSON.parse(JSON.stringify(s.aspects || [])),
     createdAt:         serverTimestamp(),
@@ -246,7 +247,7 @@ const QUESTION_TYPES = [
 
 function normalizeQuestion(q) {
   if (typeof q === 'string') return { text: q, type: 'scale', options: [], required: true };
-  return { text: q.text||'', type: q.type||'scale', options: q.options||[], required: q.required !== false };
+  return { text: q.text||'', type: q.type||'scale', options: q.options||[], required: q.required !== false, responsibleLabel: q.responsibleLabel||'' };
 }
 
 // ── Editor de aspectos ────────────────────────────────────
@@ -273,8 +274,7 @@ function syncAspectsFromDOM() {
   });
 }
 
-${renderOptionsEditor(aIdx, qIdx, qn.options)}
-            ${qn.type==='groups' ? `<input class="form-input responsible-label-input" style="margin-top:6px;height:32px;font-size:12px" value="${(qn.responsibleLabel||'Responsable').replace(/"/g,'&quot;')}" placeholder="Etiqueta responsable (ej: Quién recoge)">` : ''}
+function renderOptionsEditor(aIdx, qIdx, options) {
   const hasOptions = ['radio','checkbox','select'].includes(aspectsData[aIdx]?.questions[qIdx]?.type);
   if (!hasOptions) return '';
   const opts = (options||[]).length ? options : [''];
@@ -338,6 +338,7 @@ function renderAspectsEditor() {
               <button class="btn-remove" title="Eliminar pregunta" onclick="removeQuestion(${aIdx},${qIdx})">✕</button>
             </div>
             ${renderOptionsEditor(aIdx, qIdx, qn.options)}
+            ${qn.type==='groups' ? `<input class="form-input responsible-label-input" style="margin-top:6px;height:32px;font-size:12px" value="${(qn.responsibleLabel||'Responsable').replace(/"/g,'&quot;')}" placeholder="Etiqueta responsable (ej: Quién recoge)">` : ''}
           </div>`;
         }).join('')}
       </div>
@@ -652,12 +653,13 @@ window.openResponse = function(id) {
       const comment = r.questionComments?.[`${aIdx}_${qIdx}`]||'';
 
       if (qType==='groups') {
+        const respLabel = (typeof q==='object' && q.responsibleLabel) || 'Responsable';
         html += `<div class="detail-row" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="detail-q">${qText}</span>`;
         if (score&&score.groups) {
           html += `<div style="width:100%">${score.groups.map((g,gi)=>`
             <div style="margin-bottom:6px;padding:8px;background:var(--surface-alt);border-radius:var(--rs)">
               <div style="font-size:11px;font-weight:700;color:var(--rm-blue);margin-bottom:4px">Grupo ${gi+1} (${g.members.length+1} personas)</div>
-              <div style="font-size:12px;margin-bottom:2px">👑 <strong>Responsable:</strong> ${g.responsible||'—'}</div>
+              <div style="font-size:12px;margin-bottom:2px">👑 <strong>${respLabel}:</strong> ${g.responsible||'—'}</div>
               ${g.members.map((m,mi)=>`<div style="font-size:12px;color:var(--text-sec);padding-left:18px">${mi+2}. ${m||'—'}</div>`).join('')}
             </div>`).join('')}</div>`;
         } else {
