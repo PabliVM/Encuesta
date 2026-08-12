@@ -108,6 +108,7 @@ function renderSurveyList() {
         <button class="btn-copy" onclick="copyLink('${s.id}')">📋 Copiar enlace</button>
         <button class="btn-sm" onclick="openPreview('${s.id}')">👁 Ver encuesta</button>
         <button class="btn-sm" onclick="editSurvey('${s.id}')">Editar</button>
+        <button class="btn-sm" onclick="duplicateSurvey('${s.id}')">⧉ Duplicar</button>
         <button class="btn-danger" onclick="toggleSurveyActive('${s.id}', ${s.active})">
           ${s.active ? 'Desactivar' : 'Activar'}
         </button>
@@ -116,6 +117,25 @@ function renderSurveyList() {
     </div>
   `).join('');
 }
+
+window.duplicateSurvey = async function(id) {
+  const s = allSurveys.find(x => x.id === id);
+  if (!s) return;
+  const copy = {
+    title:             (s.title || 'Sin título') + ' (copia)',
+    description:       s.description || '',
+    season:            s.season || '',
+    active:            false,
+    showScale:         s.showScale !== false,
+    limitOnePerDevice: s.limitOnePerDevice === true,
+    scaleLabels:       s.scaleLabels || ['Muy bajo','Bajo','Correcto','Bueno','Excelente'],
+    aspects:           JSON.parse(JSON.stringify(s.aspects || [])),
+    createdAt:         serverTimestamp(),
+    updatedAt:         serverTimestamp(),
+  };
+  await addDoc(collection(db, 'survey'), copy);
+  await loadAllSurveys();
+};
 
 window.openPreview = function(surveyId) {
   const frame = document.getElementById('previewFrame');
