@@ -202,7 +202,7 @@ body{
 .comment-wrap{ margin-top:4px; }
 .comment-label{
   display:block; font-size:12px; font-weight:700;
-  color:var(--text-mut); margin-bottom:6px;
+  color:var(--text-sec); margin-bottom:6px;
   text-transform:uppercase; letter-spacing:.4px;
 }
 .optional{ font-weight:400; font-style:italic; text-transform:none; letter-spacing:0; }
