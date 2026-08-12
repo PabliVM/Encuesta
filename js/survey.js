@@ -379,15 +379,15 @@ function renderSurvey() {
   const hasScaleQuestion = (surveyData.aspects || []).some(a =>
     a.active && (a.questions || []).some(q => (typeof q === 'string' ? 'scale' : (q.type || 'scale')) === 'scale')
   );
-  const scaleWrap = document.querySelector('.scale-legend');
-  const pillsWrap = document.querySelector('.scale-pills');
-  if (surveyData.showScale === false || !hasScaleQuestion) {
-    if (scaleWrap) scaleWrap.style.display = 'none';
-    if (pillsWrap) pillsWrap.style.display = 'none';
-  } else {
-    if (scaleWrap) scaleWrap.style.display = '';
-    if (pillsWrap) pillsWrap.style.display = '';
-  }
+ const scaleWrap  = document.querySelector('.scale-legend');
+  const pillsWrap  = document.querySelector('.scale-pills');
+  const showScale  = surveyData.showScale !== false && hasScaleQuestion;
+  if (scaleWrap) scaleWrap.style.display = showScale ? '' : 'none';
+  if (pillsWrap) pillsWrap.style.display = showScale ? '' : 'none';
+
+  const hasDesc = !!(surveyData.description || '').trim();
+  const introCard = document.querySelector('.survey-intro');
+  if (introCard) introCard.style.display = (hasDesc || showScale) ? '' : 'none';
 
   const container = document.getElementById('aspectsContainer');
   container.innerHTML = '';
