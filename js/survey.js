@@ -402,7 +402,8 @@ function renderSurvey() {
       const inputHtml    = renderQuestionInput(qn, aIdx, qIdx);
       const needsComment = qn.type === 'scale';
       const optLabel     = qn.required === false
-        ? ' <span style="font-size:11px;color:var(--text-mut);font-weight:400">(opcional)</span>' : '';
+        ? ' <span style="font-size:11px;color:var(--text-mut);font-weight:400;text-transform:none">(opcional)</span>'
+        : ' <span style="font-size:11px;color:var(--text-mut);font-weight:400;text-transform:none">(obligatorio)</span>';
       return `
         <div class="question-row">
           <label class="question-label">${qn.text}${optLabel}</label>
