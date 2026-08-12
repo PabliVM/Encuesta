@@ -694,37 +694,41 @@ window.exportCSV = async function() {
   }
   const XLSX = window.XLSX;
 
-  const headers = ['Fecha','Media global'];
-  const colMeta = [];
+  // Detectar si hay preguntas de tipo groups para decidir estructura
+  const groupQuestions = [];
+  const regularColMeta = [];
+  const regularHeaders = ['Fecha', 'Media global'];
 
   (survey?.aspects||[]).forEach((a,aIdx) => {
     (a.questions||[]).forEach((q,qIdx) => {
       const qText = typeof q==='string' ? q : (q.text||`Q${qIdx+1}`);
       const qType = typeof q==='string' ? 'scale' : (q.type||'scale');
-      headers.push(`${a.title} — ${qText}`);
-      colMeta.push({aIdx,qIdx,qType});
-      if (qType==='scale') {
-        headers.push(`${a.title} — ${qText} (comentario)`);
-        colMeta.push({aIdx,qIdx,qType:'scale_comment'});
+      if (qType === 'groups') {
+        groupQuestions.push({aIdx, qIdx, qText, aTitle: a.title});
+      } else {
+        regularHeaders.push(`${a.title} — ${qText}`);
+        regularColMeta.push({aIdx, qIdx, qType});
+        if (qType==='scale') {
+          regularHeaders.push(`${a.title} — ${qText} (comentario)`);
+          regularColMeta.push({aIdx, qIdx, qType:'scale_comment'});
+        }
       }
     });
-    headers.push(`${a.title} — Comentario general`);
-    colMeta.push({aIdx,qIdx:-1,qType:'aspect_comment'});
+    regularHeaders.push(`${a.title} — Comentario general`);
+    regularColMeta.push({aIdx, qIdx:-1, qType:'aspect_comment'});
   });
 
-  const rows = allResponses.map(r => {
+  const wb = XLSX.utils.book_new();
+
+  // ── HOJA 1: Respuestas generales (sin grupos) ──────────
+  const mainRows = allResponses.map(r => {
     const date = r.submittedAt?.toDate ? r.submittedAt.toDate().toLocaleString('es-ES') : '';
     const row = [date, r.globalAverage!=null?r.globalAverage:''];
-    colMeta.forEach(({aIdx,qIdx,qType}) => {
+    regularColMeta.forEach(({aIdx,qIdx,qType}) => {
       if (qType==='aspect_comment') {
         row.push(r.aspectComments?.[aIdx]||'');
       } else if (qType==='scale_comment') {
         row.push(r.questionComments?.[`${aIdx}_${qIdx}`]||'');
-      } else if (qType==='groups') {
-        const data = r.answers?.[`${aIdx}_${qIdx}`];
-        if (data&&data.groups) {
-          row.push(data.groups.map((g,gi)=>`Grupo ${gi+1}: ${[g.responsible,...g.members].filter(Boolean).join(', ')}`).join(' | '));
-        } else { row.push(''); }
       } else {
         const val = r.answers?.[`${aIdx}_${qIdx}`];
         row.push(val!=null?val:'');
@@ -733,10 +737,64 @@ window.exportCSV = async function() {
     return row;
   });
 
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([headers,...rows]);
-  ws['!cols'] = headers.map((h,i) => ({wch: i===0?20:Math.min(Math.max(h.length,12),40)}));
-  XLSX.utils.book_append_sheet(wb, ws, 'Respuestas');
+  const wsMain = XLSX.utils.aoa_to_sheet([regularHeaders, ...mainRows]);
+  wsMain['!cols'] = regularHeaders.map((h,i) => ({wch: i===0?20:Math.min(Math.max(h.length,12),40)}));
+  XLSX.utils.book_append_sheet(wb, wsMain, 'Respuestas');
+
+  // ── HOJA 2: Grupos (una fila por persona) ──────────────
+  if (groupQuestions.length > 0) {
+    const groupHeaders = ['Fecha', 'Jugador (pregunta texto libre)', 'Pregunta grupos', 'Grupo', 'Persona', 'Recoge entradas'];
+    const groupRows = [];
+
+    allResponses.forEach(r => {
+      const date = r.submittedAt?.toDate ? r.submittedAt.toDate().toLocaleString('es-ES') : '';
+
+      groupQuestions.forEach(({aIdx, qIdx, qText, aTitle}) => {
+        const data = r.answers?.[`${aIdx}_${qIdx}`];
+        if (!data || !data.groups) return;
+
+        // Buscar el nombre del jugador en preguntas de texto del mismo aspecto
+        let jugador = '';
+        (survey?.aspects||[]).forEach((a, aI) => {
+          (a.questions||[]).forEach((q, qI) => {
+            const qType = typeof q==='string' ? 'scale' : (q.type||'scale');
+            if (qType === 'text') {
+              const val = r.answers?.[`${aI}_${qI}`];
+              if (val) jugador = val;
+            }
+          });
+        });
+
+        data.groups.forEach((g, gi) => {
+          // Responsable
+          groupRows.push([
+            date,
+            jugador,
+            qText,
+            `Grupo ${gi + 1}`,
+            g.responsible || '—',
+            'Sí'
+          ]);
+          // Miembros
+          g.members.forEach(m => {
+            groupRows.push([
+              date,
+              jugador,
+              qText,
+              `Grupo ${gi + 1}`,
+              m || '—',
+              'No'
+            ]);
+          });
+        });
+      });
+    });
+
+    const wsGroups = XLSX.utils.aoa_to_sheet([groupHeaders, ...groupRows]);
+    wsGroups['!cols'] = groupHeaders.map(h => ({wch: Math.min(Math.max(h.length, 14), 40)}));
+    XLSX.utils.book_append_sheet(wb, wsGroups, 'Grupos');
+  }
+
   XLSX.writeFile(wb, `${survey?.title||'encuesta'}_respuestas.xlsx`);
 };
 
