@@ -718,15 +718,16 @@ window.exportCSV = async function() {
   const surveyId = allResponses[0]?.surveyId||'';
   const survey   = allSurveys.find(s=>s.id===surveyId);
 
-  if (!window.XLSX) {
+  if (!window.ExcelJS) {
     await new Promise((res,rej) => {
       const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
       s.onload=res; s.onerror=rej;
       document.head.appendChild(s);
     });
   }
-  const XLSX = window.XLSX;
+  const ExcelJS = window.ExcelJS;
+  const wb = new ExcelJS.Workbook();
 
   // Detectar si hay preguntas de tipo groups para decidir estructura
   const groupQuestions = [];
@@ -758,8 +759,6 @@ window.exportCSV = async function() {
     regularColMeta.push({aIdx, qIdx:-1, qType:'aspect_comment'});
   });
 
-  const wb = XLSX.utils.book_new();
-
   // ── HOJA 1: Respuestas generales (sin grupos, sin media global) ──
   const mainRows = allResponses.map(r => {
     const date = r.submittedAt?.toDate ? r.submittedAt.toDate().toLocaleString('es-ES') : '';
@@ -786,24 +785,26 @@ window.exportCSV = async function() {
     return row;
   });
 
-  const wsMain = XLSX.utils.aoa_to_sheet([regularHeaders, ...mainRows]);
-  wsMain['!cols'] = regularHeaders.map((h,i) => ({wch: i===0?20:Math.min(Math.max(h.length,12),40)}));
-  XLSX.utils.book_append_sheet(wb, wsMain, 'Respuestas');
+  const wsMain = wb.addWorksheet('Respuestas');
+  wsMain.addRow(regularHeaders);
+  mainRows.forEach(row => wsMain.addRow(row));
+  wsMain.columns = regularHeaders.map((h,i) => ({ width: i===0?20:Math.min(Math.max(h.length,12),40) }));
 
-  // ── HOJA 2: Grupos (una fila por persona, sin repetir jugador/grupo) ──
+  // ── HOJA 2: Grupos (jugador repetido en cada grupo, amarillo en jugador/grupo/recoge) ──
   if (groupQuestions.length > 0) {
+    const wsGroups = wb.addWorksheet('Grupos');
     const groupHeaders = ['FECHA', 'JUGADOR', 'GRUPO', 'PERSONA', 'RECOGE'];
-    const groupRows = [];
+    wsGroups.addRow(groupHeaders);
+
+    const YELLOW = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
 
     allResponses.forEach(r => {
       const date = r.submittedAt?.toDate ? r.submittedAt.toDate().toLocaleString('es-ES') : '';
-      let isFirstResponse = true;
 
       groupQuestions.forEach(({aIdx, qIdx}) => {
         const data = r.answers?.[`${aIdx}_${qIdx}`];
         if (!data || !data.groups) return;
 
-        // Buscar nombre del jugador en preguntas de texto libre
         let jugador = '';
         (survey?.aspects||[]).forEach((a, aI) => {
           (a.questions||[]).forEach((q, qI) => {
@@ -817,41 +818,43 @@ window.exportCSV = async function() {
 
         data.groups.forEach((g, gi) => {
           const grupoLabel = `Grupo ${gi + 1}`;
-          let isFirstInGroup = true;
 
-          // Responsable — siempre primera fila del grupo
-          groupRows.push([
-            isFirstResponse && gi === 0 ? date : '',
-            isFirstResponse && gi === 0 ? jugador : '',
-            isFirstInGroup ? grupoLabel : '',
+          // Fila responsable — jugador + grupo + recoge en amarillo (se repite en cada grupo)
+          const rowResp = wsGroups.addRow([
+            gi === 0 ? date : '',
+            jugador,
+            grupoLabel,
             g.responsible || '—',
             'Sí'
           ]);
-          isFirstInGroup = false;
-          isFirstResponse = false;
+          rowResp.getCell(2).fill = YELLOW;
+          rowResp.getCell(3).fill = YELLOW;
+          rowResp.getCell(4).fill = YELLOW;
+          rowResp.getCell(5).fill = YELLOW;
 
-          // Miembros — sin repetir fecha, jugador ni grupo
+          // Miembros — sin color, sin repetir fecha/jugador/grupo
           g.members.forEach(m => {
-            groupRows.push([
-              '',
-              '',
-              '',
-              m || '—',
-              ''
-            ]);
+            wsGroups.addRow(['', '', '', m || '—', '']);
           });
         });
       });
     });
 
-    const wsGroups = XLSX.utils.aoa_to_sheet([groupHeaders, ...groupRows]);
-    wsGroups['!cols'] = [
-      {wch:20}, {wch:24}, {wch:10}, {wch:24}, {wch:8}
+    wsGroups.columns = [
+      { width: 20 }, { width: 24 }, { width: 10 }, { width: 24 }, { width: 8 }
     ];
-    XLSX.utils.book_append_sheet(wb, wsGroups, 'Grupos');
   }
 
-  XLSX.writeFile(wb, `${survey?.title||'encuesta'}_respuestas.xlsx`);
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${survey?.title||'encuesta'}_respuestas.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 };
 
 window.closeModal = function(id) {
