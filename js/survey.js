@@ -530,7 +530,7 @@ function attachTextSelectEvents() {
 }
 
 function attachRatingEvents() {
-  document.querySelectorAll('.rating-group').forEach(group => {
+  document.querySelectorAll('.rating-group:not(.yesno-group)').forEach(group => {
     group.querySelectorAll('.rating-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const val  = parseInt(btn.dataset.val);
