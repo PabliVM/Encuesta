@@ -128,8 +128,6 @@ window.duplicateSurvey = async function(id) {
     active:            false,
     showScale:         s.showScale !== false,
     limitOnePerDevice: s.limitOnePerDevice === true,
-    limitOneIP:        s.limitOneIP === true,
-    scaleLegendLabel:  s.scaleLegendLabel || 'Escala de valoración:',
     scaleLabels:       s.scaleLabels || ['Muy bajo','Bajo','Correcto','Bueno','Excelente'],
     aspects:           JSON.parse(JSON.stringify(s.aspects || [])),
     createdAt:         serverTimestamp(),
@@ -181,8 +179,6 @@ window.openNewSurvey = function() {
   $('surveyActive').value = 'true';
   if ($('surveyShowScale'))   $('surveyShowScale').checked   = true;
   if ($('surveyLimitDevice')) $('surveyLimitDevice').checked = false;
-  if ($('surveyLimitIP'))     $('surveyLimitIP').checked     = false;
-  if ($('surveyScaleLegend')) $('surveyScaleLegend').value = 'Escala de valoración:';
   [1,2,3,4,5].forEach(n => { if ($('scaleLabel'+n)) $('scaleLabel'+n).value = DEFAULT_SCALE[n-1]; });
   $('modalSurveyTitle').textContent = 'Nueva encuesta';
   renderAspectsEditor();
@@ -201,8 +197,6 @@ window.editSurvey = function(id) {
   $('surveyActive').value = String(s.active !== false);
   if ($('surveyShowScale'))   $('surveyShowScale').checked   = s.showScale !== false;
   if ($('surveyLimitDevice')) $('surveyLimitDevice').checked = s.limitOnePerDevice === true;
-  if ($('surveyLimitIP'))     $('surveyLimitIP').checked     = s.limitOneIP === true;
-  if ($('surveyScaleLegend')) $('surveyScaleLegend').value = s.scaleLegendLabel || 'Escala de valoración:';
   [1,2,3,4,5].forEach(n => { if ($('scaleLabel'+n)) $('scaleLabel'+n).value = (s.scaleLabels||DEFAULT_SCALE)[n-1]; });
   $('modalSurveyTitle').textContent = 'Editar encuesta';
   renderAspectsEditor();
@@ -220,8 +214,6 @@ window.saveSurvey = async function() {
     active:            $('surveyActive').value === 'true',
     showScale:         $('surveyShowScale')?.checked !== false,
     limitOnePerDevice: $('surveyLimitDevice')?.checked === true,
-    limitOneIP:        $('surveyLimitIP')?.checked === true,
-    scaleLegendLabel:  $('surveyScaleLegend')?.value?.trim() || 'Escala de valoración:',
     scaleLabels,
     aspects:           aspectsData,
     updatedAt:         serverTimestamp(),
@@ -251,7 +243,7 @@ const QUESTION_TYPES = [
 
 function normalizeQuestion(q) {
   if (typeof q === 'string') return { text: q, type: 'scale', options: [], required: true };
-  return { text: q.text||'', type: q.type||'scale', options: q.options||[], required: q.required !== false, responsibleLabel: q.responsibleLabel||'' };
+  return { text: q.text||'', type: q.type||'scale', options: q.options||[], required: q.required !== false };
 }
 
 // ── Editor de aspectos ────────────────────────────────────
@@ -272,8 +264,6 @@ function syncAspectsFromDOM() {
       if (optInputs.length) {
         aspectsData[aIdx].questions[qIdx].options = Array.from(optInputs).map(i => i.value).filter(Boolean);
       }
-      const respInput = row.querySelector('.responsible-label-input');
-      if (respInput) aspectsData[aIdx].questions[qIdx].responsibleLabel = respInput.value;
     });
   });
 }
@@ -317,6 +307,10 @@ function renderAspectsEditor() {
           <input type="checkbox" ${a.twoColumns?'checked':''} onchange="toggleTwoColumns(${aIdx},this.checked)">
           2 col.
         </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-sec);white-space:nowrap;flex-shrink:0;cursor:pointer" title="Mostrar comentario del aspecto">
+          <input type="checkbox" ${a.showComment===true?'checked':''} onchange="toggleAspectComment(${aIdx},this.checked)">
+          Coment.
+        </label>
         <button class="btn-remove" onclick="removeAspect(${aIdx})">✕</button>
       </div>
       <div class="questions-list">
@@ -342,7 +336,6 @@ function renderAspectsEditor() {
               <button class="btn-remove" title="Eliminar pregunta" onclick="removeQuestion(${aIdx},${qIdx})">✕</button>
             </div>
             ${renderOptionsEditor(aIdx, qIdx, qn.options)}
-            ${qn.type==='groups' ? `<input class="form-input responsible-label-input" style="margin-top:6px;height:32px;font-size:12px" value="${(qn.responsibleLabel||'Responsable').replace(/"/g,'&quot;')}" placeholder="Etiqueta responsable (ej: Quién recoge)">` : ''}
           </div>`;
         }).join('')}
       </div>
@@ -357,8 +350,6 @@ function updateScaleVisibility() {
   );
   const scaleSection = document.querySelector('.scale-section');
   if (scaleSection) scaleSection.style.display = hasScale ? '' : 'none';
-  const legendBlock = document.querySelector('.scale-legend-block');
-  if (legendBlock) legendBlock.style.display = hasScale ? '' : 'none';
 }
 
 window.changeQuestionType = function(aIdx, qIdx, type) {
@@ -405,6 +396,11 @@ window.toggleTwoColumns = function(aIdx, val) {
   syncAspectsFromDOM();
   aspectsData[aIdx].twoColumns = val;
   renderAspectsEditor();
+};
+
+window.toggleAspectComment = function(aIdx, val) {
+  syncAspectsFromDOM();
+  aspectsData[aIdx].showComment = val;
 };
 
 window.addAspect = function() {
@@ -659,13 +655,12 @@ window.openResponse = function(id) {
       const comment = r.questionComments?.[`${aIdx}_${qIdx}`]||'';
 
       if (qType==='groups') {
-        const respLabel = (typeof q==='object' && q.responsibleLabel) || 'Responsable';
         html += `<div class="detail-row" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="detail-q">${qText}</span>`;
         if (score&&score.groups) {
           html += `<div style="width:100%">${score.groups.map((g,gi)=>`
             <div style="margin-bottom:6px;padding:8px;background:var(--surface-alt);border-radius:var(--rs)">
               <div style="font-size:11px;font-weight:700;color:var(--rm-blue);margin-bottom:4px">Grupo ${gi+1} (${g.members.length+1} personas)</div>
-              <div style="font-size:12px;margin-bottom:2px">👑 <strong>${respLabel}:</strong> ${g.responsible||'—'}</div>
+              <div style="font-size:12px;margin-bottom:2px">👑 <strong>Responsable:</strong> ${g.responsible||'—'}</div>
               ${g.members.map((m,mi)=>`<div style="font-size:12px;color:var(--text-sec);padding-left:18px">${mi+2}. ${m||'—'}</div>`).join('')}
             </div>`).join('')}</div>`;
         } else {
@@ -718,16 +713,15 @@ window.exportCSV = async function() {
   const surveyId = allResponses[0]?.surveyId||'';
   const survey   = allSurveys.find(s=>s.id===surveyId);
 
-  if (!window.ExcelJS) {
+  if (!window.XLSX) {
     await new Promise((res,rej) => {
       const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
       s.onload=res; s.onerror=rej;
       document.head.appendChild(s);
     });
   }
-  const ExcelJS = window.ExcelJS;
-  const wb = new ExcelJS.Workbook();
+  const XLSX = window.XLSX;
 
   // Detectar si hay preguntas de tipo groups para decidir estructura
   const groupQuestions = [];
@@ -759,6 +753,8 @@ window.exportCSV = async function() {
     regularColMeta.push({aIdx, qIdx:-1, qType:'aspect_comment'});
   });
 
+  const wb = XLSX.utils.book_new();
+
   // ── HOJA 1: Respuestas generales (sin grupos, sin media global) ──
   const mainRows = allResponses.map(r => {
     const date = r.submittedAt?.toDate ? r.submittedAt.toDate().toLocaleString('es-ES') : '';
@@ -785,26 +781,24 @@ window.exportCSV = async function() {
     return row;
   });
 
-  const wsMain = wb.addWorksheet('Respuestas');
-  wsMain.addRow(regularHeaders);
-  mainRows.forEach(row => wsMain.addRow(row));
-  wsMain.columns = regularHeaders.map((h,i) => ({ width: i===0?20:Math.min(Math.max(h.length,12),40) }));
+  const wsMain = XLSX.utils.aoa_to_sheet([regularHeaders, ...mainRows]);
+  wsMain['!cols'] = regularHeaders.map((h,i) => ({wch: i===0?20:Math.min(Math.max(h.length,12),40)}));
+  XLSX.utils.book_append_sheet(wb, wsMain, 'Respuestas');
 
-  // ── HOJA 2: Grupos (jugador repetido en cada grupo, amarillo en jugador/grupo/recoge) ──
+  // ── HOJA 2: Grupos (una fila por persona, sin repetir jugador/grupo) ──
   if (groupQuestions.length > 0) {
-    const wsGroups = wb.addWorksheet('Grupos');
     const groupHeaders = ['FECHA', 'JUGADOR', 'GRUPO', 'PERSONA', 'RECOGE'];
-    wsGroups.addRow(groupHeaders);
-
-    const YELLOW = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+    const groupRows = [];
 
     allResponses.forEach(r => {
       const date = r.submittedAt?.toDate ? r.submittedAt.toDate().toLocaleString('es-ES') : '';
+      let isFirstResponse = true;
 
       groupQuestions.forEach(({aIdx, qIdx}) => {
         const data = r.answers?.[`${aIdx}_${qIdx}`];
         if (!data || !data.groups) return;
 
+        // Buscar nombre del jugador en preguntas de texto libre
         let jugador = '';
         (survey?.aspects||[]).forEach((a, aI) => {
           (a.questions||[]).forEach((q, qI) => {
@@ -818,43 +812,41 @@ window.exportCSV = async function() {
 
         data.groups.forEach((g, gi) => {
           const grupoLabel = `Grupo ${gi + 1}`;
+          let isFirstInGroup = true;
 
-          // Fila responsable — jugador + grupo + recoge en amarillo (se repite en cada grupo)
-          const rowResp = wsGroups.addRow([
-            gi === 0 ? date : '',
-            jugador,
-            grupoLabel,
+          // Responsable — siempre primera fila del grupo
+          groupRows.push([
+            isFirstResponse && gi === 0 ? date : '',
+            isFirstResponse && gi === 0 ? jugador : '',
+            isFirstInGroup ? grupoLabel : '',
             g.responsible || '—',
             'Sí'
           ]);
-          rowResp.getCell(2).fill = YELLOW;
-          rowResp.getCell(3).fill = YELLOW;
-          rowResp.getCell(4).fill = YELLOW;
-          rowResp.getCell(5).fill = YELLOW;
+          isFirstInGroup = false;
+          isFirstResponse = false;
 
-          // Miembros — sin color, sin repetir fecha/jugador/grupo
+          // Miembros — sin repetir fecha, jugador ni grupo
           g.members.forEach(m => {
-            wsGroups.addRow(['', '', '', m || '—', '']);
+            groupRows.push([
+              '',
+              '',
+              '',
+              m || '—',
+              ''
+            ]);
           });
         });
       });
     });
 
-    wsGroups.columns = [
-      { width: 20 }, { width: 24 }, { width: 10 }, { width: 24 }, { width: 8 }
+    const wsGroups = XLSX.utils.aoa_to_sheet([groupHeaders, ...groupRows]);
+    wsGroups['!cols'] = [
+      {wch:20}, {wch:24}, {wch:10}, {wch:24}, {wch:8}
     ];
+    XLSX.utils.book_append_sheet(wb, wsGroups, 'Grupos');
   }
 
-  const buf = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buf], { type: 'application/octet-stream' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${survey?.title||'encuesta'}_respuestas.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  XLSX.writeFile(wb, `${survey?.title||'encuesta'}_respuestas.xlsx`);
 };
 
 window.closeModal = function(id) {
