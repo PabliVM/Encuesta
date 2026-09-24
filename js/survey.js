@@ -1,7 +1,7 @@
 // js/survey.js — Encuesta pública · Cantera RM
 import { db } from "./firebase-init.js";
 import {
-  doc, getDoc, addDoc, collection, serverTimestamp
+  doc, getDoc, setDoc, addDoc, collection, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 let surveyData  = null;
@@ -36,6 +36,18 @@ function getCookie(name) {
   return match ? match[2] : null;
 }
 
+// ── IP ────────────────────────────────────────────────────
+async function getPublicIP() {
+  try {
+    const res = await fetch('https://api.ipify.org?format=json');
+    const data = await res.json();
+    return data.ip || null;
+  } catch(e) {
+    console.error('No se pudo obtener IP', e);
+    return null;
+  }
+}
+
 // ── INIT ──────────────────────────────────────────────────
 (async function init() {
   const params = new URLSearchParams(window.location.search);
@@ -65,6 +77,20 @@ function getCookie(name) {
       if (getCookie(cookieKey)) {
         showInvalid("Ya has completado esta encuesta en este dispositivo.");
         return;
+      }
+    }
+
+    // Comprobar IP solo si limitOneIP está activo
+    if (!isPreview && surveyData.limitOneIP === true) {
+      const ip = await getPublicIP();
+      if (ip) {
+        window._surveyIP = ip;
+        const ipDocId = `${surveyId}_${ip.replace(/[.:]/g,'-')}`;
+        const ipSnap = await getDoc(doc(db, "surveyIPs", ipDocId));
+        if (ipSnap.exists()) {
+          showInvalid("Ya se ha respondido esta encuesta desde esta conexión.");
+          return;
+        }
       }
     }
 
@@ -147,6 +173,13 @@ function renderQuestionInput(qn, aIdx, qIdx) {
 }
 
 // ── TIPO GRUPOS ───────────────────────────────────────────
+function getResponsibleLabel(key) {
+  const [aIdx, qIdx] = key.split('_').map(Number);
+  const q = surveyData?.aspects?.[aIdx]?.questions?.[qIdx];
+  const qn = typeof q === 'string' ? {} : (q || {});
+  return qn.responsibleLabel || 'Responsable';
+}
+
 function renderGroupsInput(key) {
   // Si ya hay datos guardados, restaurar directamente
   const saved = window.answers[key];
@@ -177,13 +210,14 @@ function renderGroupsInput(key) {
 }
 
 function renderGroupsFromData(key, data) {
+  const respLabel = getResponsibleLabel(key);
   const groupsHtml = data.groups.map((g, gi) => `
     <div class="group-card">
       <div class="group-header">Grupo ${gi + 1} <span style="font-size:11px;color:var(--text-mut)">(${g.members.length + 1} personas)</span></div>
       <div class="group-member group-responsible">
-        <span class="group-resp-badge">Responsable</span>
+        <span class="group-resp-badge">${respLabel}</span>
         <input class="form-input group-name-input" type="text"
-          placeholder="Nombre responsable"
+          placeholder="Nombre y apellidos"
           value="${(g.responsible||'').replace(/"/g,'&quot;')}"
           oninput="updateGroupMember('${key}',${gi},'responsible',this.value)">
       </div>
@@ -191,7 +225,7 @@ function renderGroupsFromData(key, data) {
         <div class="group-member">
           <span class="group-member-num">${mi + 2}</span>
           <input class="form-input group-name-input" type="text"
-            placeholder="Nombre ${mi + 2}"
+            placeholder="Nombre y apellidos ${mi + 2}"
             value="${(m||'').replace(/"/g,'&quot;')}"
             oninput="updateGroupMember('${key}',${gi},'member',this.value,${mi})">
         </div>`).join('')}
@@ -338,12 +372,21 @@ function renderSurvey() {
     pill.textContent = `${i+1} · ${scaleLabels[i]}`;
   });
 
-  // Mostrar/ocultar leyenda
-  if (surveyData.showScale === false) {
-    const scaleWrap = document.querySelector('.scale-legend');
-    const pillsWrap = document.querySelector('.scale-pills');
+  const legendEl = document.querySelector('.scale-legend');
+  if (legendEl) legendEl.textContent = surveyData.scaleLegendLabel || 'Escala de valoración:';
+
+  // Mostrar leyenda SOLO si hay al menos una pregunta tipo escala activa Y showScale !== false
+  const hasScaleQuestion = (surveyData.aspects || []).some(a =>
+    a.active && (a.questions || []).some(q => (typeof q === 'string' ? 'scale' : (q.type || 'scale')) === 'scale')
+  );
+  const scaleWrap = document.querySelector('.scale-legend');
+  const pillsWrap = document.querySelector('.scale-pills');
+  if (surveyData.showScale === false || !hasScaleQuestion) {
     if (scaleWrap) scaleWrap.style.display = 'none';
     if (pillsWrap) pillsWrap.style.display = 'none';
+  } else {
+    if (scaleWrap) scaleWrap.style.display = '';
+    if (pillsWrap) pillsWrap.style.display = '';
   }
 
   const container = document.getElementById('aspectsContainer');
@@ -380,7 +423,8 @@ function renderSurvey() {
         <h3 class="aspect-title">${aspect.title}</h3>
       </div>
       ${isTwoCol ? `<div class="two-col-grid">${questionsHtml}</div>` : questionsHtml}
-      ${aspect.showComment === true ? `<div class="comment-wrap">
+      ${aspect.showComment !== false ? `
+      <div class="comment-wrap">
         <label class="comment-label">Comentario sobre este aspecto <span class="optional">(opcional)</span></label>
         <textarea class="comment-input" data-aspect-comment="${aIdx}"
           placeholder="Escribe aquí tu comentario…" rows="3"></textarea>
@@ -628,6 +672,7 @@ function buildReview() {
 
       if (qType === 'groups') {
         const data = score;
+        const respLabel = getResponsibleLabel(`${aIdx}_${qIdx}`);
         if (data && data.groups) {
           sec.innerHTML += `<div class="review-row" style="flex-direction:column;align-items:flex-start;gap:6px">
             <span class="review-q">${qText}</span>
@@ -635,7 +680,7 @@ function buildReview() {
               ${data.groups.map((g, gi) => `
                 <div style="margin-bottom:6px;padding:8px;background:var(--surface-alt);border-radius:var(--rs)">
                   <div style="font-size:11px;font-weight:700;color:var(--rm-blue);margin-bottom:4px">Grupo ${gi+1}</div>
-                  <div style="font-size:12px"><strong>Responsable:</strong> ${g.responsible || '—'}</div>
+                  <div style="font-size:12px"><strong>${respLabel}:</strong> ${g.responsible || '—'}</div>
                   ${g.members.map((m,mi) => `<div style="font-size:12px;color:var(--text-sec)">${mi+2}. ${m || '—'}</div>`).join('')}
                 </div>`).join('')}
             </div>
@@ -721,6 +766,12 @@ window.submitSurvey = async function() {
 
     if (surveyData.limitOnePerDevice === true) {
       setCookie(`survey_done_${surveyId}`, '1', 365);
+    }
+    if (surveyData.limitOneIP === true && window._surveyIP) {
+      const ipDocId = `${surveyId}_${window._surveyIP.replace(/[.:]/g,'-')}`;
+      try {
+        await setDoc(doc(db, "surveyIPs", ipDocId), { surveyId, createdAt: serverTimestamp() });
+      } catch(e) { console.error('No se pudo registrar IP', e); }
     }
     showView('viewSent');
     hide('progressWrap');
