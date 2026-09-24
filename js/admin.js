@@ -317,6 +317,10 @@ function renderAspectsEditor() {
           <input type="checkbox" ${a.twoColumns?'checked':''} onchange="toggleTwoColumns(${aIdx},this.checked)">
           2 col.
         </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-sec);white-space:nowrap;flex-shrink:0;cursor:pointer">
+          <input type="checkbox" ${a.showComment!==false?'checked':''} onchange="toggleShowComment(${aIdx},this.checked)">
+          Comentario
+        </label>
         <button class="btn-remove" onclick="removeAspect(${aIdx})">✕</button>
       </div>
       <div class="questions-list">
@@ -404,6 +408,12 @@ window.moveQuestion = function(aIdx, qIdx, dir) {
 window.toggleTwoColumns = function(aIdx, val) {
   syncAspectsFromDOM();
   aspectsData[aIdx].twoColumns = val;
+  renderAspectsEditor();
+};
+
+window.toggleShowComment = function(aIdx, val) {
+  syncAspectsFromDOM();
+  aspectsData[aIdx].showComment = val;
   renderAspectsEditor();
 };
 
