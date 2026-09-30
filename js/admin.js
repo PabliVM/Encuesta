@@ -97,13 +97,8 @@ async function loadAllSurveys() {
   renderSurveyList();
 }
 
-function renderSurveyList() {
-  const el = $('surveyList');
-  if (!allSurveys.length) {
-    el.innerHTML = '<p style="color:var(--text-mut);font-size:13px">No hay encuestas. Crea la primera.</p>';
-    return;
-  }
-  el.innerHTML = allSurveys.map(s => `
+function renderSurveyItem(s) {
+  return `
     <div class="survey-item">
       <div class="survey-item-info">
         <div class="survey-item-title">${s.title || 'Sin título'}</div>
@@ -121,7 +116,29 @@ function renderSurveyList() {
         <button class="btn-danger" onclick="deleteSurvey('${s.id}')">🗑 Eliminar</button>
       </div>
     </div>
-  `).join('');
+  `;
+}
+
+function renderSurveyList() {
+  const el = $('surveyList');
+  if (!allSurveys.length) {
+    el.innerHTML = '<p style="color:var(--text-mut);font-size:13px">No hay encuestas. Crea la primera.</p>';
+    return;
+  }
+  const active   = allSurveys.filter(s => s.active);
+  const inactive = allSurveys.filter(s => !s.active);
+
+  let html = active.map(renderSurveyItem).join('');
+  if (inactive.length) {
+    html += `
+      <details class="inactive-surveys-group" style="margin-top:12px">
+        <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--text-mut);padding:8px 0;user-select:none">
+          Inactivas (${inactive.length}) — mostrar
+        </summary>
+        <div style="margin-top:8px">${inactive.map(renderSurveyItem).join('')}</div>
+      </details>`;
+  }
+  el.innerHTML = html;
 }
 
 window.duplicateSurvey = async function(id) {
@@ -455,6 +472,32 @@ window.toggleRequired = function(aIdx, qIdx, val) {
 };
 
 // ── RESULTADOS ────────────────────────────────────────────
+function renderResultsCard(s, allResp) {
+  const responses = allResp.filter(r => r.surveyId === s.id);
+  const count = responses.length;
+  const hasScale = (s.aspects||[]).some(a => (a.questions||[]).some(q => (typeof q === 'string' ? 'scale' : q.type) === 'scale'));
+  const avgs = responses.map(r => r.globalAverage).filter(v => v != null);
+  const mean = hasScale && avgs.length ? (avgs.reduce((a,b)=>a+b,0)/avgs.length).toFixed(2) : null;
+  return `
+    <div class="survey-item" style="cursor:pointer" onclick="openResultsSurvey('${s.id}')">
+      <div class="survey-item-info">
+        <div class="survey-item-title">${s.title || 'Sin título'}</div>
+        <div class="survey-item-meta">${s.season || ''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;flex-shrink:0">
+        <div style="text-align:center">
+          <div style="font-size:22px;font-weight:800;color:var(--rm-blue)">${count}</div>
+          <div style="font-size:10px;color:var(--text-mut);text-transform:uppercase;letter-spacing:.3px">Respuestas</div>
+        </div>
+        ${mean !== null ? `<div style="text-align:center">
+          <div style="font-size:22px;font-weight:800;color:var(--green)">${mean}</div>
+          <div style="font-size:10px;color:var(--text-mut);text-transform:uppercase;letter-spacing:.3px">Media</div>
+        </div>` : ''}
+        <span style="color:var(--text-mut);font-size:18px">›</span>
+      </div>
+    </div>`;
+}
+
 window.loadResults = async function() {
   const snap = await getDocs(collection(db, 'surveyResponses'));
   const allResp = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -463,31 +506,20 @@ window.loadResults = async function() {
     cards.innerHTML = '<p style="color:var(--text-mut);font-size:13px">No hay encuestas.</p>';
     return;
   }
-  cards.innerHTML = allSurveys.map(s => {
-    const responses = allResp.filter(r => r.surveyId === s.id);
-    const count = responses.length;
-    const hasScale = (s.aspects||[]).some(a => (a.questions||[]).some(q => (typeof q === 'string' ? 'scale' : q.type) === 'scale'));
-    const avgs = responses.map(r => r.globalAverage).filter(v => v != null);
-    const mean = hasScale && avgs.length ? (avgs.reduce((a,b)=>a+b,0)/avgs.length).toFixed(2) : null;
-    return `
-      <div class="survey-item" style="cursor:pointer" onclick="openResultsSurvey('${s.id}')">
-        <div class="survey-item-info">
-          <div class="survey-item-title">${s.title || 'Sin título'}</div>
-          <div class="survey-item-meta">${s.season || ''}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:16px;flex-shrink:0">
-          <div style="text-align:center">
-            <div style="font-size:22px;font-weight:800;color:var(--rm-blue)">${count}</div>
-            <div style="font-size:10px;color:var(--text-mut);text-transform:uppercase;letter-spacing:.3px">Respuestas</div>
-          </div>
-          ${mean !== null ? `<div style="text-align:center">
-            <div style="font-size:22px;font-weight:800;color:var(--green)">${mean}</div>
-            <div style="font-size:10px;color:var(--text-mut);text-transform:uppercase;letter-spacing:.3px">Media</div>
-          </div>` : ''}
-          <span style="color:var(--text-mut);font-size:18px">›</span>
-        </div>
-      </div>`;
-  }).join('');
+  const active   = allSurveys.filter(s => s.active);
+  const inactive = allSurveys.filter(s => !s.active);
+
+  let html = active.map(s => renderResultsCard(s, allResp)).join('');
+  if (inactive.length) {
+    html += `
+      <details class="inactive-surveys-group" style="margin-top:12px">
+        <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--text-mut);padding:8px 0;user-select:none">
+          Inactivas (${inactive.length}) — mostrar
+        </summary>
+        <div style="margin-top:8px">${inactive.map(s => renderResultsCard(s, allResp)).join('')}</div>
+      </details>`;
+  }
+  cards.innerHTML = html;
 };
 
 window.openResultsSurvey = async function(surveyId) {
