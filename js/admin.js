@@ -88,6 +88,12 @@ window.showTab = function(tabId) {
 async function loadAllSurveys() {
   const snap = await getDocs(collection(db, 'survey'));
   allSurveys = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  allSurveys.sort((a, b) => {
+    if (a.active !== b.active) return a.active ? -1 : 1;
+    const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+    const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+    return tb - ta;
+  });
   renderSurveyList();
 }
 
